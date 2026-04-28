@@ -1,0 +1,75 @@
+{
+  "_comment": "Copy this file to .squad/identity/config.json and fill in your GitHub App details. Remove this _comment field.",
+  "tier": "per-role",
+  "keysDir": "~/.config/squad/{org}/keys",
+  "agentNameMap": {
+    "_comment": "Populated automatically by: node .squad/scripts/configure-identity.mjs --update-charters",
+    "_example": "leela: lead, fry: frontend, bender: backend"
+  },
+  "apps": {
+    "_comment": "One entry per role slug. Fill in appId, appSlug, installationId from your GitHub Apps.",
+    "lead": {
+      "appId": 0,
+      "appSlug": "your-squad-lead",
+      "installationId": 0,
+      "roleSlug": "lead",
+      "tier": "per-role"
+    },
+    "frontend": {
+      "appId": 0,
+      "appSlug": "your-squad-frontend",
+      "installationId": 0,
+      "roleSlug": "frontend",
+      "tier": "per-role"
+    },
+    "backend": {
+      "appId": 0,
+      "appSlug": "your-squad-backend",
+      "installationId": 0,
+      "roleSlug": "backend",
+      "tier": "per-role"
+    },
+    "tester": {
+      "appId": 0,
+      "appSlug": "your-squad-tester",
+      "installationId": 0,
+      "roleSlug": "tester",
+      "tier": "per-role"
+    },
+    "security": {
+      "appId": 0,
+      "appSlug": "your-squad-security",
+      "installationId": 0,
+      "roleSlug": "security",
+      "tier": "per-role"
+    },
+    "codereview": {
+      "appId": 0,
+      "appSlug": "your-squad-codereview",
+      "installationId": 0,
+      "roleSlug": "codereview",
+      "tier": "per-role"
+    },
+    "devops": {
+      "appId": 0,
+      "appSlug": "your-squad-devops",
+      "installationId": 0,
+      "roleSlug": "devops",
+      "tier": "per-role"
+    },
+    "docs": {
+      "appId": 0,
+      "appSlug": "your-squad-docs",
+      "installationId": 0,
+      "roleSlug": "docs",
+      "tier": "per-role"
+    },
+    "scribe": {
+      "appId": 0,
+      "appSlug": "your-squad-scribe",
+      "installationId": 0,
+      "roleSlug": "scribe",
+      "tier": "per-role"
+    }
+  }
+}

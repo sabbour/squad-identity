@@ -1,0 +1,8 @@
+# squad-identity
+
+# Keys — never commit
+identity/keys/
+
+# Node
+node_modules/
+.npm/
