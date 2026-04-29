@@ -8,6 +8,8 @@
  *   --update-copilot-instructions  Replace identity block in .github/copilot-instructions.md
  *   --doctor                    Health check: config, keys, resolve-token, token resolution
  *   --status                    Print agentNameMap + registered apps
+ *   --inject-context <json>     Inject identity context block into an agent's charter
+ *   --inject-coordinator-context  Inject coordinator context into the lead agent's charter
  *
  * Zero runtime dependencies — only Node.js built-ins.
  */
@@ -182,6 +184,7 @@ function cmdStatus() {
   if (!cfg) {
     console.log('❌ No identity config found at:', CONFIG_PATH);
     console.log('   Run: node configure-identity.mjs --update-charters');
+    process.exitCode = 1;
     return;
   }
 
@@ -216,7 +219,7 @@ function cmdStatus() {
 // --doctor
 // ---------------------------------------------------------------------------
 
-function cmdDoctor() {
+async function cmdDoctor() {
   console.log('\n🩺 Identity Doctor\n');
   let ok = true;
 
@@ -241,27 +244,56 @@ function cmdDoctor() {
       console.log(`✅ Apps registered: ${appCount}`);
     }
 
-    const keysDir = cfg.keysDir;
-    if (keysDir) {
-      if (!existsSync(keysDir)) {
-        console.log('❌ keysDir not found:', keysDir);
-        ok = false;
+    // Check keychain availability
+    let keychainModule;
+    try {
+      keychainModule = await import(new URL('./keychain.mjs', import.meta.url));
+    } catch { /* ignore */ }
+
+    if (keychainModule) {
+      const available = await keychainModule.keychainAvailable();
+      if (!available) {
+        console.log('⚠  OS keychain not available — PEM keys cannot be resolved locally');
+        console.log('   macOS: install Keychain Access (built-in)');
+        console.log('   Linux: install libsecret (apt install libsecret-tools)');
       } else {
-        const pems = readdirSync(keysDir).filter(f => f.endsWith('.pem'));
-        if (pems.length === 0) {
-          console.log('⚠  No .pem files in keysDir:', keysDir);
-        } else {
-          console.log(`✅ PEM keys: ${pems.length} found`);
+        console.log('✅ OS keychain available');
+        // Check that each app has a PEM in the keychain
+        const apps = cfg.apps ?? {};
+        let keychainKeys = 0;
+        let missingKeys = 0;
+        for (const [role, app] of Object.entries(apps)) {
+          if (role.startsWith('_')) continue;
+          if (app.appId && app.appId !== 0) {
+            try {
+              const pem = await keychainModule.keychainLoad(String(app.appId));
+              if (pem) {
+                keychainKeys++;
+              } else {
+                console.log(`⚠  No PEM in keychain for role "${role}" (appId: ${app.appId})`);
+                missingKeys++;
+              }
+            } catch {
+              console.log(`⚠  Could not load PEM from keychain for role "${role}" (appId: ${app.appId})`);
+              missingKeys++;
+            }
+          }
+        }
+        if (keychainKeys > 0) {
+          console.log(`✅ PEM keys in keychain: ${keychainKeys}`);
+        }
+        if (missingKeys > 0) {
+          ok = false;
         }
       }
     } else {
-      console.log('⚠  keysDir not set in config.json');
+      console.log('⚠  keychain.mjs not found — skipping keychain check');
     }
   }
 
-  const resolveTokenPath = join(SQUAD_DIR, 'scripts', 'resolve-token.mjs');
+  const resolveTokenPath = join(REPO_ROOT, '.github', 'extensions', 'squad-identity', 'lib', 'resolve-token.mjs');
   if (!existsSync(resolveTokenPath)) {
-    console.log('⚠  resolve-token.mjs not in .squad/scripts/ — run install.sh or identity_setup_steps');
+    console.log('⚠  resolve-token.mjs not found in extension lib — run squad-identity init');
   } else {
     console.log('✅ resolve-token.mjs accessible');
   }
@@ -345,7 +377,7 @@ function cmdUpdateCharters() {
         content = content.replace(/ROLE_SLUG=["'][^"']*["'][^\n]*# injected[^\n]*/g, roleSlugLine);
         changed = true;
       }
-      // If no ROLE_SLUG at all, the agent will use identity_status — no injection needed
+      // If no ROLE_SLUG at all, the agent will use squad_identity_status — no injection needed
     }
 
     // Add skill pointer if not already present
@@ -379,30 +411,20 @@ function buildIdentityBlock() {
 This project uses GitHub App bot identity for all agent-authored writes.
 Read \`.squad/skills/squad-identity/SKILL.md\` before any GitHub write.
 
-\`\`\`bash
-TEAM_ROOT=$(git rev-parse --show-toplevel)
-# Your ROLE_SLUG is injected into your charter — look for:
-#   ROLE_SLUG="<slug>"  # injected by configure-identity --update-charters
-# If absent: node "$TEAM_ROOT/.squad/scripts/configure-identity.mjs" --status
+**Use the \`squad_identity_resolve_token\` tool** to get a bot token for your ROLE_SLUG.
 
-unset GH_TOKEN GITHUB_TOKEN
-export GH_CONFIG_DIR="$TEAM_ROOT/.squad/runtime/gh-config/$$"
-mkdir -p "$GH_CONFIG_DIR"
-
-TOKEN=$(node "$TEAM_ROOT/.squad/scripts/resolve-token.mjs" --required "$ROLE_SLUG") || exit 1
-[ -n "$TOKEN" ] || exit 1
-
-# Use token inline per-call — never export:
-GH_TOKEN="$TOKEN" gh pr create ...
-git push "https://x-access-token:\${TOKEN}@github.com/{owner}/{repo}.git" HEAD
+Your ROLE_SLUG is injected into your charter — look for:
+\`\`\`
+ROLE_SLUG="<slug>"  # injected by configure-identity --update-charters
 \`\`\`
 
-Post-flight check after every write:
+If absent, call \`squad_identity_status\` to see the full agentNameMap.
+
+**Token usage (inline per-call, never export):**
 \`\`\`bash
-GH_TOKEN="$TOKEN" node "$TEAM_ROOT/.squad/scripts/post-flight-check.mjs" \\
-  --kind <review|comment|label|pr-create|issue-edit|commit> \\
-  --owner {owner} --repo {repo} [--pr N | --issue N | --sha SHA] [--id ID] \\
-  --expected-login {app_slug}[bot]
+GH_TOKEN="$TOKEN" gh pr create ...
+GH_TOKEN="$TOKEN" gh api /repos/{owner}/{repo}/issues -f title="..." 
+git push "https://x-access-token:\${TOKEN}@github.com/{owner}/{repo}.git" HEAD
 \`\`\`
 ${IDENTITY_BLOCK_END}`;
 }
@@ -435,6 +457,120 @@ function cmdUpdateCopilotInstructions() {
 }
 
 // ---------------------------------------------------------------------------
+// --inject-context
+// ---------------------------------------------------------------------------
+
+async function cmdInjectContext(jsonStr) {
+  const parsed = JSON.parse(jsonStr);
+  const { role, scopeId, appSlug, installationId, repoRoot } = parsed;
+
+  const { buildIdentityContext } = await import(
+    new URL('./identity-context-builder.mjs', import.meta.url)
+  );
+
+  const contextBlock = buildIdentityContext({ role, scopeId, appSlug, installationId, repoRoot });
+
+  const cfg = loadConfig();
+  if (!cfg) {
+    console.error(JSON.stringify({ success: false, error: 'config.json not found' }));
+    process.exit(1);
+  }
+
+  // Find agent name that maps to this role
+  const agentNameMap = cfg.agentNameMap ?? {};
+  const agent = Object.entries(agentNameMap).find(([, slug]) => slug === role)?.[0];
+  if (!agent) {
+    console.error(JSON.stringify({ success: false, error: `No agent mapped to role "${role}"` }));
+    process.exit(1);
+  }
+
+  const charterPath = join(AGENTS_DIR, agent, 'charter.md');
+  if (!existsSync(charterPath)) {
+    console.error(JSON.stringify({ success: false, error: `Charter not found: ${charterPath}` }));
+    process.exit(1);
+  }
+
+  let content = readFileSync(charterPath, 'utf-8');
+  const startTag = '<IDENTITY_CONTEXT>';
+  const endTag = '</IDENTITY_CONTEXT>';
+  const wrappedBlock = `${startTag}\n${contextBlock}\n${endTag}`;
+
+  const startIdx = content.indexOf(startTag);
+  const endIdx = content.indexOf(endTag);
+
+  if (startIdx !== -1 && endIdx !== -1) {
+    content = content.slice(0, startIdx) + wrappedBlock + content.slice(endIdx + endTag.length);
+  } else {
+    content = content.trimEnd() + '\n\n' + wrappedBlock + '\n';
+  }
+
+  writeFileSync(charterPath, content, 'utf-8');
+  console.log(JSON.stringify({ success: true, agent, charterPath }));
+}
+
+// ---------------------------------------------------------------------------
+// --inject-coordinator-context
+// ---------------------------------------------------------------------------
+
+async function cmdInjectCoordinatorContext() {
+  const { buildCoordinatorContext } = await import(
+    new URL('./identity-context-builder.mjs', import.meta.url)
+  );
+
+  const cfg = loadConfig();
+  if (!cfg) {
+    console.error(JSON.stringify({ success: false, error: 'config.json not found' }));
+    process.exit(1);
+  }
+
+  // Build roles array from apps section
+  const apps = cfg.apps ?? {};
+  const roles = Object.entries(apps)
+    .filter(([slug]) => !slug.startsWith('_'))
+    .map(([slug, app]) => ({
+      role: slug,
+      appSlug: app.appSlug,
+      appId: app.appId,
+      installationId: app.installationId,
+    }));
+
+  const contextBlock = buildCoordinatorContext(roles);
+
+  // Find the coordinator/lead agent
+  const agentNameMap = cfg.agentNameMap ?? {};
+  const leadEntry = Object.entries(agentNameMap).find(
+    ([, slug]) => slug === 'lead' || slug === 'coordinator'
+  );
+  if (!leadEntry) {
+    console.error(JSON.stringify({ success: false, error: 'No agent mapped to "lead" or "coordinator" role' }));
+    process.exit(1);
+  }
+
+  const charterPath = join(AGENTS_DIR, leadEntry[0], 'charter.md');
+  if (!existsSync(charterPath)) {
+    console.error(JSON.stringify({ success: false, error: `Charter not found: ${charterPath}` }));
+    process.exit(1);
+  }
+
+  let content = readFileSync(charterPath, 'utf-8');
+  const startTag = '<COORDINATOR_IDENTITY_CONTEXT>';
+  const endTag = '</COORDINATOR_IDENTITY_CONTEXT>';
+  const wrappedBlock = `${startTag}\n${contextBlock}\n${endTag}`;
+
+  const startIdx = content.indexOf(startTag);
+  const endIdx = content.indexOf(endTag);
+
+  if (startIdx !== -1 && endIdx !== -1) {
+    content = content.slice(0, startIdx) + wrappedBlock + content.slice(endIdx + endTag.length);
+  } else {
+    content = content.trimEnd() + '\n\n' + wrappedBlock + '\n';
+  }
+
+  writeFileSync(charterPath, content, 'utf-8');
+  console.log(JSON.stringify({ success: true, charterPath }));
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -443,11 +579,21 @@ const args = process.argv.slice(2);
 if (args.includes('--status')) {
   cmdStatus();
 } else if (args.includes('--doctor')) {
-  cmdDoctor();
+  await cmdDoctor();
 } else if (args.includes('--update-charters')) {
   cmdUpdateCharters();
 } else if (args.includes('--update-copilot-instructions')) {
   cmdUpdateCopilotInstructions();
+} else if (args.includes('--inject-context')) {
+  const idx = args.indexOf('--inject-context');
+  const jsonArg = args[idx + 1];
+  if (!jsonArg) {
+    console.error(JSON.stringify({ success: false, error: '--inject-context requires a JSON string argument' }));
+    process.exit(1);
+  }
+  await cmdInjectContext(jsonArg);
+} else if (args.includes('--inject-coordinator-context')) {
+  await cmdInjectCoordinatorContext();
 } else {
   console.log(`
 Usage: node configure-identity.mjs <flag>
@@ -458,6 +604,9 @@ Flags:
   --update-charters             Infer agentNameMap from team.md, write to config.json,
                                 inject ROLE_SLUG into each agent charter
   --update-copilot-instructions Replace/append identity block in .github/copilot-instructions.md
+  --inject-context <json>       Inject identity context block into an agent's charter
+                                JSON: { "role", "scopeId", "appSlug", "installationId", "repoRoot" }
+  --inject-coordinator-context  Inject coordinator identity context into the lead agent's charter
 `);
   process.exit(1);
 }

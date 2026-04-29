@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
 import { execFile, spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createInterface } from "node:readline";
 
 const ROLE_PATTERNS = [
   { slug: "security", keywords: ["security", "auth", "compliance"] },
@@ -18,7 +19,7 @@ const ROLE_PATTERNS = [
   { slug: "lead", keywords: ["lead", "architect", "tech lead"] },
 ];
 
-const HELP_TEXT = `Usage: node .squad/scripts/install-apps.mjs [--check] [--role <role>]
+const HELP_TEXT = `Usage: node install-apps.mjs [--check] [--role <role>]
 
 Options:
   --check          Report installation status without opening browser tabs
@@ -75,7 +76,9 @@ function parseArgs(argv) {
 
 function getProjectRoot() {
   const scriptDir = dirname(fileURLToPath(import.meta.url));
-  return join(scriptDir, "..", "..");
+  // From extensions/squad-identity/lib/ → go up 4 levels to repo root
+  // lib/ → squad-identity/ → extensions/ → .github/ → repo_root
+  return join(scriptDir, "..", "..", "..", "..");
 }
 
 function loadIdentityConfig(projectRoot) {
@@ -290,7 +293,7 @@ function getConfiguredApps(registrations, usedIdentitySlugs, selectedRole) {
 }
 
 function canResolveInstallationToken(projectRoot, role) {
-  const resolveTokenPath = join(projectRoot, ".squad", "scripts", "resolve-token.mjs");
+  const resolveTokenPath = join(dirname(fileURLToPath(import.meta.url)), "resolve-token.mjs");
   const result = spawnSync(process.execPath, [resolveTokenPath, "--required", role], {
     cwd: projectRoot,
     stdio: "ignore",
@@ -369,7 +372,7 @@ function getInstallUrl(appSlug) {
   return `https://github.com/apps/${appSlug}/installations/new`;
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     console.log(HELP_TEXT);
@@ -412,6 +415,74 @@ function main() {
   for (const app of missingApps) {
     console.log(`Opening browser: ${app.installUrl}`);
     openBrowser(app.installUrl);
+  }
+
+  // Wait for user to complete browser installs, then capture installation IDs
+  console.log("\n⏳ After installing the apps in the browser, press Enter to continue...");
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  await new Promise(resolve => rl.question("", () => { rl.close(); resolve(); }));
+
+  // Try to capture installation IDs for missing apps
+  console.log("\n🔍 Checking installation status...\n");
+  for (const app of missingApps) {
+    const installed = canResolveInstallationToken(projectRoot, app.role);
+    if (installed) {
+      console.log(`✅ ${app.role} (${app.appSlug}) — installed and token resolves`);
+      // Try to capture the installation ID via the GitHub API
+      await captureInstallationId(projectRoot, app, origin);
+    } else {
+      console.log(`❌ ${app.role} (${app.appSlug}) — not yet installed or token resolution failed`);
+    }
+  }
+}
+
+async function captureInstallationId(projectRoot, app, origin) {
+  // Use app's JWT to find the installation for this repo
+  try {
+    const keychainPath = join(dirname(fileURLToPath(import.meta.url)), "keychain.mjs");
+    const resolveTokenPath = join(dirname(fileURLToPath(import.meta.url)), "resolve-token.mjs");
+
+    // Dynamically import to get JWT generation
+    const { keychainLoad } = await import(keychainPath);
+
+    const appPath = join(projectRoot, ".squad", "identity", "apps", `${app.role}.json`);
+    if (!existsSync(appPath)) return;
+
+    const appData = JSON.parse(readFileSync(appPath, "utf8"));
+    const appId = appData.appId;
+    if (!appId) return;
+
+    const pem = keychainLoad(String(appId));
+    if (!pem) return;
+
+    // Generate JWT (import the function from resolve-token)
+    const { generateAppJWT } = await import(resolveTokenPath);
+    const jwt = generateAppJWT(appId, pem);
+
+    // Query installations for this app
+    const response = await fetch("https://api.github.com/app/installations", {
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    });
+
+    if (!response.ok) return;
+
+    const installations = await response.json();
+    // Find installation for our repo's owner
+    const match = installations.find(inst =>
+      inst.account?.login?.toLowerCase() === origin.owner.toLowerCase()
+    );
+
+    if (match && match.id) {
+      appData.installationId = match.id;
+      writeFileSync(appPath, `${JSON.stringify(appData, null, 2)}\n`, "utf8");
+      console.log(`   → Saved installationId=${match.id} to ${app.role}.json`);
+    }
+  } catch {
+    // Best effort — user can manually set installationId later
   }
 }
 

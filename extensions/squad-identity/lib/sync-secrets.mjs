@@ -2,9 +2,11 @@
 // sync-secrets.mjs — Upload squad PEM keys and app IDs as GitHub repo secrets.
 //
 // Usage:
-//   node .squad/scripts/sync-secrets.mjs           # sync all roles
-//   node .squad/scripts/sync-secrets.mjs --check    # dry-run: show status
-//   node .squad/scripts/sync-secrets.mjs --role lead # sync one role only
+//   node sync-secrets.mjs           # sync all roles
+//   node sync-secrets.mjs --check    # dry-run: show status
+//   node sync-secrets.mjs --role lead # sync one role only
+//
+// Reads PEM keys from OS keychain (keyed by appId).
 //
 // Secrets created per role (matching the names resolve-token.mjs expects):
 //   SQUAD_{ROLE}_PRIVATE_KEY      (PEM file content)
@@ -13,9 +15,19 @@
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, dirname, extname } from 'node:path';
-import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+
+// OS keychain integration
+let keychainLoad = null;
+let keychainAvailable = null;
+try {
+  const keychain = await import('./keychain.mjs');
+  keychainLoad = keychain.keychainLoad;
+  keychainAvailable = keychain.keychainAvailable;
+} catch {
+  // Keychain module unavailable
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -23,10 +35,6 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const projectRoot = join(dirname(__filename), '..', '..');
-
-function resolveHome(p) {
-  return p.startsWith('~') ? join(homedir(), p.slice(1)) : p;
-}
 
 function secretNameKey(role) {
   return `SQUAD_${role.toUpperCase()}_PRIVATE_KEY`;
@@ -102,17 +110,22 @@ if (!existsSync(configPath)) {
 
 const config = JSON.parse(readFileSync(configPath, 'utf-8'));
 
-if (!config.keysDir || typeof config.keysDir !== 'string') {
-  console.error('❌  "keysDir" is missing or empty in .squad/identity/config.json. Set it to an absolute path or a ~-prefixed path to the directory containing role PEM files.');
+if (!keychainLoad || !keychainAvailable || !keychainAvailable()) {
+  console.error(
+    '❌  OS keychain is not available on this system.\n' +
+    '    sync-secrets reads PEM keys from the OS keychain.\n\n' +
+    '    To fix this:\n' +
+    '      macOS: Keychain Access is built-in (security command should be available)\n' +
+    '      Linux: Install libsecret — apt install libsecret-tools (Ubuntu/Debian)\n' +
+    '             or dnf install libsecret (Fedora/RHEL)'
+  );
   process.exit(1);
 }
 
-const keysDir = resolveHome(config.keysDir);
 const { owner, repo } = detectRepo();
 const nwo = `${owner}/${repo}`;
 
 console.log(`\n🔐  sync-secrets — repo: ${nwo}`);
-console.log(`    keysDir: ${keysDir}\n`);
 
 // ---------------------------------------------------------------------------
 // Discover roles from .squad/identity/apps/ directory
@@ -173,8 +186,9 @@ for (const role of roles) {
     process.exit(1);
   }
 
-  const pemPath = join(keysDir, `${role}.pem`);
-  const hasPem = existsSync(pemPath);
+  // Load PEM from keychain
+  const pem = keychainLoad(appId);
+  const hasPem = Boolean(pem);
   const keySecret = secretNameKey(role);
   const idSecret = secretNameId(role);
   const installSecret = secretNameInstallId(role);
@@ -184,7 +198,7 @@ for (const role of roles) {
     results.push({
       role,
       keySecret,
-      keyStatus: existing.has(keySecret) ? '✅ exists' : hasPem ? '⚠️  missing (PEM available)' : '❌ missing (no PEM)',
+      keyStatus: existing.has(keySecret) ? '✅ exists' : hasPem ? '⚠️  missing (PEM in keychain)' : '❌ missing (no PEM in keychain)',
       idSecret,
       idStatus: existing.has(idSecret) ? '✅ exists' : '⚠️  missing',
       installSecret,
@@ -196,11 +210,10 @@ for (const role of roles) {
   // --- Upload PEM ---
   let keyStatus;
   if (hasPem) {
-    const pem = readFileSync(pemPath, 'utf-8');
     const ok = ghSecretSet(keySecret, pem, nwo);
     keyStatus = ok ? '✅ synced' : '❌ failed';
   } else {
-    keyStatus = '⏭️  skipped (no PEM)';
+    keyStatus = '⏭️  skipped (no PEM in keychain)';
   }
 
   // --- Upload App ID ---

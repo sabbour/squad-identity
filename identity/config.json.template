@@ -1,7 +1,6 @@
 {
   "_comment": "Copy this file to .squad/identity/config.json and fill in your GitHub App details. Remove this _comment field.",
   "tier": "per-role",
-  "keysDir": "~/.config/squad/{org}/keys",
   "agentNameMap": {
     "_comment": "Populated automatically by: node .squad/scripts/configure-identity.mjs --update-charters",
     "_example": "leela: lead, fry: frontend, bender: backend"
@@ -71,5 +70,22 @@
       "roleSlug": "scribe",
       "tier": "per-role"
     }
+  },
+  "branches": {
+    "_comment": "Per-branch governance requirements. Agents cannot open PRs to branches with missing workflows.",
+    "main": {
+      "required_workflows": [],
+      "required_labels": []
+    },
+    "dev": {
+      "required_workflows": [],
+      "required_labels": []
+    }
+  },
+  "attestation": {
+    "_comment": "Audit trail configuration for bot-authored writes.",
+    "enabled": true,
+    "log_dir": ".squad/attestation",
+    "rotation": "daily"
   }
 }

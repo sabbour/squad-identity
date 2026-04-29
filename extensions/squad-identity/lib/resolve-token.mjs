@@ -3,14 +3,22 @@
 // Standalone token resolution for agent identity.
 // Uses only Node.js built-in modules — no npm dependencies required.
 //
-// Usage: node .squad/scripts/resolve-token.mjs <role_slug>
+// Usage: node resolve-token.mjs <role_slug>
 // Output: installation access token on stdout, or nothing on failure (exit 0).
 
 import { createSign } from 'node:crypto';
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { homedir } from 'node:os';
+
+// Keychain integration (dynamic import for standalone script compatibility)
+let keychainLoad = null;
+try {
+  const keychain = await import('./keychain.mjs');
+  keychainLoad = keychain.keychainLoad;
+} catch {
+  // Keychain module unavailable (e.g., running standalone without the extension lib)
+}
 
 // ============================================================================
 // Base64url helpers
@@ -291,7 +299,7 @@ async function resolveTokenWithDiagnostics(projectRoot, roleKey) {
       return { token, resolvedRoleKey, error: null };
     }
 
-    // Path 2: Filesystem (default)
+    // Path 2: OS Keychain (macOS Keychain, Linux libsecret)
     const reg = loadAppRegistration(projectRoot, resolvedRoleKey);
     if (!reg) {
       return {
@@ -301,56 +309,41 @@ async function resolveTokenWithDiagnostics(projectRoot, roleKey) {
       };
     }
 
-    // Check in-repo keys first, then config.keysDir, then conventional path
-    const config = loadIdentityConfig(projectRoot);
-    const pemName = `${resolvedRoleKey}.pem`;
-    let pemPath = join(projectRoot, '.squad', 'identity', 'keys', pemName);
-
-    if (!existsSync(pemPath)) {
-      let found = false;
-
-      // Try explicit config.keysDir
-      if (config?.keysDir) {
-        const extPath = join(config.keysDir, pemName);
-        if (existsSync(extPath)) {
-          pemPath = extPath;
-          found = true;
+    if (keychainLoad) {
+      try {
+        const keychainPem = keychainLoad(reg.appId);
+        if (keychainPem) {
+          const jwt = generateAppJWT(reg.appId, keychainPem);
+          const { token, expiresAt } = await getInstallationToken(jwt, reg.installationId);
+          tokenCache.set(resolvedRoleKey, { token, expiresAt });
+          return { token, resolvedRoleKey, error: null };
         }
-      }
-
-      // Try conventional ~/.config/squad/*/keys/
-      if (!found) {
-        const squadConfigDir = join(homedir(), '.config', 'squad');
-        if (existsSync(squadConfigDir)) {
-          try {
-            for (const owner of readdirSync(squadConfigDir)) {
-              const candidate = join(squadConfigDir, owner, 'keys', pemName);
-              if (existsSync(candidate)) {
-                pemPath = candidate;
-                found = true;
-                break;
-              }
-            }
-          } catch { /* ignore scan errors */ }
-        }
-      }
-
-      if (!found) {
-        return {
-          token: null,
-          resolvedRoleKey,
-          error: `No private key found for role "${resolvedRoleKey}" at .squad/identity/keys/${resolvedRoleKey}.pem` +
-            (config?.keysDir ? ` or ${config.keysDir}/${pemName}.` : ' or ~/.config/squad/*/keys/.'),
-        };
+      } catch {
+        // Keychain lookup failed — fall through to error
       }
     }
 
-    const pem = readFileSync(pemPath, 'utf-8');
-    const jwt = generateAppJWT(reg.appId, pem);
-    const { token, expiresAt } = await getInstallationToken(jwt, reg.installationId);
+    // No credentials found via env vars or keychain
+    const noKeychainHint = !keychainLoad
+      ? '\n\nYour system does not have OS keychain support. To fix this:\n' +
+        '  macOS: Keychain Access is built-in (security command should be available)\n' +
+        '  Linux: Install libsecret — apt install libsecret-tools (Ubuntu/Debian)\n' +
+        '         or dnf install libsecret (Fedora/RHEL)\n' +
+        '  CI/CD: Set environment variables instead:\n' +
+        `         SQUAD_${resolvedRoleKey.toUpperCase()}_APP_ID\n` +
+        `         SQUAD_${resolvedRoleKey.toUpperCase()}_PRIVATE_KEY (base64-encoded PEM)\n` +
+        `         SQUAD_${resolvedRoleKey.toUpperCase()}_INSTALLATION_ID`
+      : '';
 
-    tokenCache.set(resolvedRoleKey, { token, expiresAt });
-    return { token, resolvedRoleKey, error: null };
+    return {
+      token: null,
+      resolvedRoleKey,
+      error: `No private key found for role "${resolvedRoleKey}" (app ID: ${reg.appId}).\n` +
+        'Credentials are resolved from: (1) environment variables, (2) OS keychain.\n' +
+        'Run create-app.mjs to create a GitHub App and store the key in your keychain,\n' +
+        'or use sync-secrets.mjs to set up environment variables for CI/CD.' +
+        noKeychainHint,
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return { token: null, resolvedRoleKey, error: message };
@@ -362,7 +355,7 @@ async function resolveToken(projectRoot, roleKey) {
   return result.token;
 }
 
-export { clearTokenCache, resolveRoleSlug, resolveToken, resolveTokenWithDiagnostics };
+export { clearTokenCache, generateAppJWT, resolveRoleSlug, resolveToken, resolveTokenWithDiagnostics };
 
 // ============================================================================
 // CLI entry point
@@ -388,12 +381,19 @@ if (isCliInvocation) {
     process.exit(required ? 1 : 0);
   }
 
-  // Derive project root from script location (.squad/scripts/ → repo root).
-  // Agents invoke this via absolute path so process.cwd() may be a worktree.
+  // Derive project root from script location.
+  // When running from extensions/squad-identity/lib/ → go up 4 levels to repo root.
+  // When running from .squad/scripts/ (legacy) → go up 2 levels to repo root.
   let projectRoot = process.cwd();
   try {
     const scriptDir = dirname(fileURLToPath(import.meta.url));
-    projectRoot = join(scriptDir, '..', '..');
+    if (scriptDir.includes('.github/extensions')) {
+      // extensions/squad-identity/lib/ → .github/ → repo_root
+      projectRoot = join(scriptDir, '..', '..', '..', '..');
+    } else {
+      // .squad/scripts/ → .squad/ → repo_root (legacy fallback)
+      projectRoot = join(scriptDir, '..', '..');
+    }
   } catch {
     // Fallback to cwd if import.meta.url is unavailable
   }

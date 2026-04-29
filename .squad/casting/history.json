@@ -1,0 +1,22 @@
+{
+  "universe_usage_history": [
+    {
+      "universe": "The Matrix",
+      "assignment_id": "init-2026-04-28T19:58:49Z",
+      "used_at": "2026-04-28T19:58:49Z"
+    }
+  ],
+  "assignment_cast_snapshots": {
+    "init-2026-04-28T19:58:49Z": {
+      "universe": "The Matrix",
+      "agents": {
+        "lead": "Morpheus",
+        "backend": "Tank",
+        "security": "Trinity",
+        "docs": "Oracle",
+        "tester": "Switch"
+      },
+      "created_at": "2026-04-28T19:58:49Z"
+    }
+  }
+}
