@@ -24,3 +24,11 @@
 - The new install surface splits into global npm postinstall sync and explicit per-repo `squad-identity init`/`upgrade`; tests must prove local `npm install` never mutates `~/.copilot/extensions/`.
 - Regression coverage must preserve legacy `install.sh` behavior: copy extension + skill, create config from template only when absent, and stay idempotent while announcing deprecation.
 - High-risk cases are config/PEM preservation, CI detection, cross-platform path resolution via home/path APIs, deterministic exit codes, and no token/PEM leakage in wrapper output.
+
+### 2026-04-29T13:44:24-07:00 — Autonomous testing strategy researched
+- Existing CI workflows (`squad-ci.yml`, `squad-release.yml`) are placeholder templates with no real commands — must be replaced.
+- Recommended: Node 18/20/22 × Ubuntu+macOS matrix, `node --test` directly (zero deps, no test framework install needed).
+- Multi-OS matters because keychain integration differs (macOS Keychain vs Linux secret-tool).
+- Self-healing loop: daily heartbeat smoke test → issue on failure → Copilot Coding Agent auto-assigned → fix PR → CI gates merge. No human needed for routine breaks.
+- `prepack` script in package.json ensures local `npm publish` also runs tests as defense-in-depth.
+- Decision proposal written to `.squad/decisions/inbox/switch-autonomous-testing.md`.
