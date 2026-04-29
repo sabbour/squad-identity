@@ -125,6 +125,6 @@ describe('SKILL.md', () => {
   it('does not reference deleted files or legacy paths', () => {
     const skill = readFileSync(join(PACKAGE_ROOT, 'squad-identity', 'SKILL.md'), 'utf-8');
     assert.ok(!skill.includes('.squad/identity/README.md'), 'should not reference deleted identity/README.md');
-    assert.ok(!skill.includes('Step D'), 'should not have Step D (post-flight removed)');
+    assert.ok(!skill.includes('post-flight'), 'should not reference removed post-flight check');
   });
 });

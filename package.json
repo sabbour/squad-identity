@@ -16,7 +16,10 @@
   ],
   "scripts": {
     "test": "node --test 'test/**/*.test.mjs'",
-    "test:watch": "node --test --watch 'test/**/*.test.mjs'"
+    "test:watch": "node --test --watch 'test/**/*.test.mjs'",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "changeset publish"
   },
   "engines": {
     "node": ">=18"
@@ -36,5 +39,8 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Sabbour/squad-identity.git"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.31.0"
   }
 }

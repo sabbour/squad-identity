@@ -82,12 +82,25 @@ squad-identity doctor
 5. Captures installation IDs
 6. Injects `ROLE_SLUG` into each agent's charter
 
-#### Importing an existing app directly
+#### Already have GitHub Apps?
 
-If you already have GitHub Apps created (e.g., from another repo or created
-manually), you can register them without using the interactive setup:
+If you already have GitHub Apps created (from a previous repo, manually, or from
+an org), use `find-app` to locate and register them:
 
 ```bash
+# Search for an existing app by name — no PEM needed upfront
+squad-identity find-app --name my-squad-backend --role backend
+
+# What happens:
+#   1. Finds the app (public lookup → user installs → org installs)
+#   2. Opens browser to install the app into your repo
+#   3. Auto-detects the installation ID (polls for 2 min)
+#   4. Optionally asks for PEM path (press Enter to skip)
+
+# If you have the PEM handy, pass it inline:
+squad-identity find-app --name my-squad-backend --role backend --pem ~/key.pem
+
+# Or import directly if you know the app ID and slug
 squad-identity import-app \
   --role backend \
   --app-id 123456 \
@@ -95,9 +108,61 @@ squad-identity import-app \
   --pem ~/Downloads/my-squad-backend.pem
 ```
 
-The PEM is stored in the OS keychain and the local file is not kept. Run
-`squad-identity setup` afterward to install the app into the repo and update
-charters.
+`find-app` searches your user and org installations, opens the browser for
+repo-level installation, and auto-detects the installation ID. The PEM is
+**optional** — you can provide it later via `import-app` or during `setup`.
+
+If a PEM is provided, it goes straight to the OS keychain (no file left on disk).
+Then run `squad-identity setup` — it will see the pre-registered apps and skip
+creation for those roles.
+
+---
+
+## Install channels
+
+| Channel | Install command | Stability |
+|---------|----------------|-----------|
+| Stable (default) | `npm i -g @sabbour/squad-identity` | Production-ready, fully tested |
+| Insider | `npm i -g @sabbour/squad-identity@insider` | Latest features, may have rough edges |
+
+Work lands on `insider` first, then promotes to `main` when stable.
+
+---
+
+## Upgrading
+
+```bash
+npm install -g @sabbour/squad-identity@latest
+squad-identity upgrade
+```
+
+### What's preserved (never touched by upgrade)
+
+- `.squad/identity/config.json` — your agent-to-role mappings
+- `.squad/identity/apps/*.json` — app registrations
+- PEM keys in the OS keychain
+- Agent charters (ROLE_SLUG injections)
+
+### What's refreshed
+
+- `.github/extensions/squad-identity/` — extension code and lib scripts
+- `.squad/skills/squad-identity/SKILL.md` — protocol reference
+- `.github/copilot-instructions.md` — identity block re-injected
+
+### When to re-run setup
+
+If you added new roles to `.squad/team.md` after the initial setup:
+
+```bash
+squad-identity setup    # will detect new roles and offer create/import/skip
+```
+
+Or to just re-inject charters without touching apps:
+
+```bash
+squad-identity doctor   # verify health first
+# Then in a Copilot session: call squad_identity_update_charters
+```
 
 ---
 
@@ -211,12 +276,12 @@ curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/{owner}/{rep
 |---------|-------------|
 | `squad-identity init [repo]` | Install extension, skill, and config template into a Squad repo |
 | `squad-identity setup [repo]` | Guided setup: discover roles, create/import apps, install, update charters |
+| `squad-identity find-app --name <n>` | Find an existing GitHub App by name, install it, register for a role |
 | `squad-identity import-app --role <r>` | Register an existing GitHub App for a role (provide app ID, slug, PEM) |
 | `squad-identity upgrade [repo]` | Refresh extension files and copilot-instructions identity block |
 | `squad-identity rotate-key --role <r>` | Rotate a GitHub App private key (two-step guided flow) |
 | `squad-identity doctor` | Health check: config, keychain, token resolution |
 | `squad-identity status` | Show identity configuration and registered apps |
-| `squad-identity sync-secrets` | Upload keychain credentials to GitHub Actions repo secrets |
 
 ## Copilot CLI tools
 
