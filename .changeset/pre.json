@@ -4,5 +4,7 @@
   "initialVersions": {
     "@sabbour/squad-identity": "1.0.0"
   },
-  "changesets": []
+  "changesets": [
+    "first-insider-release"
+  ]
 }
