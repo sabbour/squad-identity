@@ -33,7 +33,7 @@ jobs:
         id: changesets-stable
         uses: changesets/action@v1
         with:
-          publish: npx changeset publish --access public
+          publish: npx changeset publish
           title: "chore: version packages"
           commit: "chore: version packages"
         env:
@@ -46,7 +46,7 @@ jobs:
         id: changesets-insider
         uses: changesets/action@v1
         with:
-          publish: npx changeset publish --access public
+          publish: npx changeset publish
           title: "chore: version packages (insider)"
           commit: "chore: version packages (insider)"
         env:

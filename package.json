@@ -40,6 +40,10 @@
     "type": "git",
     "url": "git+https://github.com/Sabbour/squad-identity.git"
   },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
   "devDependencies": {
     "@changesets/cli": "^2.31.0"
   }
