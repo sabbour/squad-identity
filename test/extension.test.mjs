@@ -18,9 +18,9 @@ describe('Extension: tool registration', () => {
   const toolNameMatches = [...extensionSource.matchAll(/name:\s*'(squad_identity_\w+)'/g)];
   const registeredTools = toolNameMatches.map(m => m[1]);
 
-  it('registers exactly 11 tools', () => {
-    assert.equal(registeredTools.length, 11,
-      `Expected 11 tools, found: ${registeredTools.join(', ')}`);
+  it('registers exactly 10 tools', () => {
+    assert.equal(registeredTools.length, 10,
+      `Expected 10 tools, found: ${registeredTools.join(', ')}`);
   });
 
   const expectedTools = [
@@ -33,7 +33,6 @@ describe('Extension: tool registration', () => {
     'squad_identity_resolve_token',
     'squad_identity_rotate_key',
     'squad_identity_lease_token',
-    'squad_identity_premerge_check',
     'squad_identity_attest_write',
   ];
 

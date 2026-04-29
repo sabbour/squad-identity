@@ -1,4 +1,4 @@
-<!-- squad-identity v1.0.0 | Source: github.com/Sabbour/squad-identity -->
+<!-- squad-identity v1.1.0 | Source: github.com/Sabbour/squad-identity -->
 
 # Squad Identity Protocol
 
@@ -19,6 +19,7 @@ App bot identity — never the human operator's ambient `gh` session.
 | `squad_identity_update_charters` | Infer mapping from `team.md`, update charters + `config.json` |
 | `squad_identity_update_copilot_instructions` | Replace/append identity block in `.github/copilot-instructions.md` |
 | `squad_identity_setup_steps` | Get initial setup instructions (browser-interactive steps) |
+| `squad_identity_setup_all` | Guided full setup flow (browser, app creation, installation, charter injection) |
 
 **Agent Runtime Tools:**
 
@@ -26,6 +27,13 @@ App bot identity — never the human operator's ambient `gh` session.
 |------|---------|
 | `squad_identity_resolve_token` | Resolve bot GitHub App token for current agent |
 | `squad_identity_rotate_key` | Rotate a GitHub App private key (guided flow) |
+
+**Governance Tools (v1.1.0+):**
+
+| Tool | Purpose |
+|------|---------|
+| `squad_identity_lease_token` | Issue scoped token lease (coordinator use only) |
+| `squad_identity_attest_write` | Record and verify bot-authored GitHub writes |
 
 ---
 
@@ -67,12 +75,22 @@ suffix so concurrent sessions don't share state.
 
 ### Step B — Resolve the bot token
 
-**Use the tool (required for agents):**
-```
-squad_identity_resolve_token  roleSlug="<from your charter>"
+**Option 1: Direct token (standard agents):**
+```bash
+TOKEN=$(squad_identity_resolve_token  roleSlug="<from your charter>")
 ```
 
-The tool returns the token directly. Store it in a variable and use it inline.
+**Option 2: Leased token (coordinator-gated agents):**
+```bash
+# Coordinator issues lease before spawning agent
+SCOPE_ID=$(squad_identity_lease_token  role="<slug>" maxOps="5" maxTime="600")
+
+# Agent exchanges lease for token
+TOKEN=$(squad_identity_exchange_lease  scopeId="$SCOPE_ID" role="<slug>")
+```
+
+Leases are time-bound and operation-counted. After expiry or ops exhaustion,
+token resolution fails — no bypass possible.
 
 ### Step C — Use the token inline (never export)
 
@@ -90,6 +108,23 @@ curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/{owner}/{rep
 
 Always use tokens inline per-call. **Never `export GH_TOKEN`** — it persists in
 the environment and bleeds into `set -x` tracing.
+
+### Step D — Attest the write (audit trail)
+
+After any GitHub write (PR, comment, push, label), record it:
+
+```bash
+squad_identity_attest_write \
+  owner="myorg" repo="myrepo" \
+  writeType="pr-create" writeRef="42" \
+  roleSlug="<from charter>" \
+  expectedActor="squad-identity-<role>[bot]" \
+  token="$TOKEN" \
+  verify="true"
+```
+
+Verification queries GitHub API to confirm the actual actor matches the expected
+bot identity. Mismatches are flagged in `.squad/attestation/log-YYYYMMDD.jsonl`.
 
 ---
 
@@ -134,6 +169,11 @@ Each of these is a P1 governance failure:
 | Using `/tmp` for `GH_CONFIG_DIR` | Violates repo runtime policy |
 | `tmux capture-pane`, `history`, `/proc/*/environ` reads | Environment leak vector |
 | Committing PEM keys or `apps/*.json` to version control | Credential commit |
+
+| Bypassing lease expiry with stale `scopeId` | Unbounded token lifetime |
+| Exchanging lease without verifying role matches scope | Wrong role token issued |
+| Skipping `squad_identity_attest_write` after GitHub operation | Audit trail gap, actor unverified |
+| Manual delete of `.squad/attestation/` logs | Tampering with immutable audit trail |
 
 ---
 

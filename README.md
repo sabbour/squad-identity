@@ -105,62 +105,81 @@ charters.
 
 ### Architecture
 
-```
-┌──────────────────────────────────────────────────────────┐
-│  Copilot CLI Session                                     │
-│                                                          │
-│  Extension (.github/extensions/squad-identity/)          │
-│  ├── extension.mjs          registers 8 tools            │
-│  └── lib/                                                │
-│      ├── configure-identity.mjs   charters, doctor       │
-│      ├── create-app.mjs           manifest flow          │
-│      ├── install-apps.mjs         install + capture ID   │
-│      ├── resolve-token.mjs        JWT → install token    │
-│      ├── keychain.mjs             OS keychain adapter    │
-│      └── sync-secrets.mjs         keychain → GH secrets  │
-│                                                          │
-│  Skill (.squad/skills/squad-identity/SKILL.md)           │
-│  └── Protocol agents read at spawn (Steps A-C)           │
-└──────────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+    A["Extension<br/>.github/extensions/squad-identity/"] -->|registers tools| B["10 CLI Tools<br/>squad_identity_*"]
+    B -->|calls| C["Lib Scripts<br/>configure-identity, resolve-token,<br/>attest-write, keychain, etc."]
+    D["Skill<br/>.squad/skills/squad-identity/SKILL.md"] -->|read by agents| E["Agent at Spawn<br/>follows Steps A-D"]
+    F["Config<br/>.squad/identity/config.json"] -->|stores| G["Mappings<br/>agent name → role slug → app ID"]
+    
+    style A fill:#e8f4f8
+    style D fill:#fff4e8
+    style F fill:#f0e8f8
 ```
 
-**Two layers, both upgrade-proof:**
+**Three layers, all upgrade-proof:**
 
-1. **Extension** — registers `squad_identity_*` tools in every Copilot CLI
+1. **Extension** — registers 10 `squad_identity_*` tools in every Copilot CLI
    session. Tools call `lib/*.mjs` directly.
 2. **Skill** — protocol reference injected into every agent's context at spawn.
-   Defines Steps A-C (environment setup → token resolution → inline usage) and
-   lists anti-patterns that constitute governance failures.
+   Defines Steps A-D (fail-closed setup → token resolution → inline usage
+   → attestation). Lists anti-patterns that constitute governance failures.
+3. **Config** — `.squad/identity/config.json` stores agent mappings, app registrations,
+   and attestation settings.
 
-Neither layer is in the Squad upgrade manifest — they survive all `squad upgrade`
-runs.
+None of these layers are in the Squad upgrade manifest — they survive all `squad upgrade` runs.
 
 ### Token resolution flow
 
-```
-Agent reads charter → ROLE_SLUG
-    │
-    ▼
-squad_identity_resolve_token
-    │
-    ├─ 1. Check env vars (CI/CD):  SQUAD_{ROLE}_APP_ID, _PRIVATE_KEY, _INSTALLATION_ID
-    │
-    ├─ 2. Check OS keychain:       service=squad-identity, account=app-{appId}
-    │
-    └─ 3. Sign JWT → POST /app/installations/{id}/access_tokens → short-lived token
+```mermaid
+graph TD
+    A["Agent reads charter.md"] --> B["Extract ROLE_SLUG"]
+    B --> C["Call squad_identity_resolve_token"]
+    C --> D{"Check credential sources"}
+    D -->|CI/CD env vars| E["SQUAD_&lt;ROLE&gt;_APP_ID<br/>_PRIVATE_KEY, _INSTALLATION_ID"]
+    D -->|Local machine| F["OS Keychain<br/>service=squad-identity"]
+    E --> G["Sign JWT<br/>with PEM key"]
+    F --> G
+    G --> H["POST to GitHub<br/>/app/installations/&lt;id&gt;/access_tokens"]
+    H --> I["Return short-lived token<br/>valid 1 hour"]
+    
+    style A fill:#e8f4f8
+    style I fill:#e8f8e8
 ```
 
 The returned token is used **inline per-call** — never exported, never persisted.
 
+### How agents learn the protocol
+
+Agents don't have squad-identity tooling available in their context. Instead, they read a **skill** that documents the protocol:
+
+1. **Init copies the skill:** When you run `squad-identity init [repo]`, the extension copies `squad-identity/SKILL.md` from the package into `.squad/skills/squad-identity/SKILL.md`. This is the authoritative protocol reference.
+
+2. **Charters inject the skill reference:** When `squad-identity setup` or `configure-identity --update-charters` runs, it adds this line to every agent's `charter.md`:
+   ```
+   Relevant skill: '.squad/skills/squad-identity/SKILL.md' — read before any GitHub write.
+   ```
+
+3. **Spawn coordinator inlines it:** When Squad spawns an agent, the coordinator sees this line, inlines the skill file into the agent's system context at spawn time.
+
+4. **Agent reads and follows Steps A–D:** The agent reads the skill and follows the protocol:
+   - **Step A:** Clear ambient credentials, fail-closed
+   - **Step B:** Resolve bot token (direct or scoped lease)
+   - **Step C:** Use token inline per-call
+   - **Step D:** Record the write in audit trail
+
+This chain — **init → charter injection → spawn → agent reads skill → protocol steps** — ensures every agent-authored GitHub write uses the correct bot identity, no matter how many times Squad upgrades.
+
 ### Enforcement across all GitHub write paths
 
-This is protocol-based, not hook-based. Agents follow Steps A-C from `SKILL.md`:
+This is protocol-based, not hook-based. Agents follow Steps A-D from `SKILL.md`:
 
 **Step A** clears ambient credentials and redirects `GH_CONFIG_DIR` to a
 throwaway path, so bare `gh` calls fail instead of silently using the human's
 token.
 
-**Step B** calls `squad_identity_resolve_token` to get the bot token.
+**Step B** resolves the bot token — either directly (agents) or via a scoped lease
+(coordinator-gated).
 
 **Step C** uses the token inline:
 
@@ -175,6 +194,8 @@ git push "https://x-access-token:${TOKEN}@github.com/{owner}/{repo}.git" HEAD
 # REST API (curl)
 curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/{owner}/{repo}/pulls
 ```
+
+**Step D** records the write in the audit trail with actor verification.
 
 **Rules:**
 - Always inline tokens per-call — `GH_TOKEN="$TOKEN" gh ...`
@@ -199,7 +220,7 @@ curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/{owner}/{rep
 
 ## Copilot CLI tools
 
-After restarting Copilot CLI, these tools are available in every session:
+After restarting Copilot CLI, these 10 tools are available in every session:
 
 **Admin tools:**
 
@@ -218,6 +239,13 @@ After restarting Copilot CLI, these tools are available in every session:
 |------|-------------|
 | `squad_identity_resolve_token` | Resolve bot token for the current agent's `ROLE_SLUG` |
 | `squad_identity_rotate_key` | Rotate a GitHub App private key (guided browser + keychain flow) |
+
+**Governance tools (v1.1.0+):**
+
+| Tool | What it does |
+|------|-------------|
+| `squad_identity_lease_token` | Issue scoped token lease for an agent role (coordinator use only) |
+| `squad_identity_attest_write` | Record and verify bot-authored GitHub writes in audit trail |
 
 ---
 
@@ -256,35 +284,6 @@ Squad Identity uses a **token lease system** to enforce least-privilege access. 
 - Revoked lease → exchange throws error
 
 Agents cannot bypass the lease system. Direct token resolution is blocked when governance mode is enabled.
-
----
-
-## Pre-Merge Governance
-
-Branch protection rules are enforced locally before PRs are opened.
-
-### Configuration
-
-In `.squad/identity/config.json`:
-```json
-{
-  "branches": {
-    "main": {
-      "required_workflows": ["ci.yml", "lint.yml"],
-      "required_labels": ["approved"]
-    }
-  }
-}
-```
-
-### Usage
-
-```bash
-squad-identity premerge-check --target-branch main --repo-root .
-# Returns: { "pass": true/false, "branch": "main", "missing": [...], "present": [...] }
-```
-
-Agents run this before opening PRs. If `pass` is false, the PR must not be opened.
 
 ---
 

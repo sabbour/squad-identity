@@ -360,46 +360,6 @@ Call \`squad_identity_update_copilot_instructions\` to restore the identity bloc
   });
 
   // -------------------------------------------------------------------------
-  // Tool: squad_identity_premerge_check
-  // -------------------------------------------------------------------------
-
-  session.registerTool({
-    name: 'squad_identity_premerge_check',
-    description: 'Check if a target branch has all required governance workflows',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        targetBranch: {
-          type: 'string',
-          description: 'The branch to check for required governance workflows.',
-        },
-        repoRoot: {
-          type: 'string',
-          description: 'Optional: path to the repository root. Defaults to current working directory.',
-        },
-      },
-      required: ['targetBranch'],
-    },
-    handler: async (input) => {
-      try {
-        const premergeScript = join(LIB_DIR, 'premerge-check.mjs');
-        const repoRoot = input.repoRoot || REPO_ROOT;
-
-        const { stdout, stderr } = await execFileAsync(
-          process.execPath,
-          [premergeScript, '--target-branch', input.targetBranch, '--repo-root', repoRoot],
-          { cwd: repoRoot, timeout: 15000 }
-        );
-        if (stderr) session.log(`[squad-identity] premerge-check stderr: ${stderr}`);
-        return { type: 'text', text: stdout?.trim() || 'No output.' };
-      } catch (err) {
-        const msg = err.stderr || err.message || 'unknown error';
-        return { type: 'text', text: `❌ Pre-merge check failed: ${msg}` };
-      }
-    },
-  });
-
-  // -------------------------------------------------------------------------
   // Tool: squad_identity_attest_write
   // -------------------------------------------------------------------------
 

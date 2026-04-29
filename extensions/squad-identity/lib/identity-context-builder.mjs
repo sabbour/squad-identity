@@ -69,13 +69,6 @@ You manage token leases for your agents. Before spawning any agent that needs Gi
 Available roles:
 ${roleLines}
 
-## Pre-Merge Governance
-
-Before opening a PR, run:
-\`\`\`
-node ${repoRoot}/.squad/scripts/premerge-check.mjs --target-branch <branch> --repo-root ${repoRoot}
-\`\`\`
-Only proceed if result shows pass=true.
 </COORDINATOR_IDENTITY_CONTEXT>`;
 }
 
