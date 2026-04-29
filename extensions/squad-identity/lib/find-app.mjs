@@ -19,7 +19,7 @@ import { createInterface } from 'node:readline';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const HELP_TEXT = `Usage: node find-app.mjs --name <name> [--org <org>] [--role <role>] [--pem <path>]
+const HELP_TEXT = `Usage: node find-app.mjs --name <name> [--org <org>] [--role <role>] [--pem <path>] [--force]
 
 Search for an existing GitHub App by name or slug and register it for a Squad role.
 
@@ -28,6 +28,7 @@ Options:
   --org <org>       Search this org's installations too (optional)
   --role <role>     Role slug to register the app under (optional, prompts if omitted)
   --pem <path>      Path to PEM private key file (optional, prompts if omitted)
+  --force           Overwrite existing role registration without prompting
   --help, -h        Show this help message`;
 
 function fail(message) {
@@ -36,13 +37,14 @@ function fail(message) {
 }
 
 function parseArgs(argv) {
-  const values = { name: null, org: null, role: null, pem: null };
+  const values = { name: null, org: null, role: null, pem: null, force: false };
   const valueFlags = new Set(['--name', '--org', '--role', '--pem']);
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
 
     if (arg === '--help' || arg === '-h') { values.help = true; continue; }
+    if (arg === '--force') { values.force = true; continue; }
 
     if (!arg.startsWith('--')) fail(`Unknown argument: ${arg}`);
 
@@ -309,9 +311,33 @@ If the app was created manually, use import-app instead:
     pemPath = resolvedPem;
   }
 
-  // Save app registration
+  // Idempotency guard — check for existing registration
   const appsDir = join(projectRoot, '.squad', 'identity', 'apps');
   mkdirSync(appsDir, { recursive: true });
+  const appPath = join(appsDir, `${role}.json`);
+  if (existsSync(appPath)) {
+    try {
+      const existing = JSON.parse(readFileSync(appPath, 'utf-8'));
+      console.warn(`⚠️  Role "${role}" already has an app registered: ${existing.slug ?? '(unknown)'} (ID: ${existing.appId ?? '?'})`);
+    } catch {
+      console.warn(`⚠️  Role "${role}" already has a registration file: ${appPath}`);
+    }
+    if (!args.force) {
+      if (process.stdin.isTTY) {
+        const rl2 = createInterface({ input: process.stdin, output: process.stdout });
+        const answer = await new Promise(res => rl2.question('Overwrite? [y/N] ', res));
+        rl2.close();
+        if (answer.trim().toLowerCase() !== 'y') {
+          console.log('Aborted.');
+          process.exit(0);
+        }
+      } else {
+        fail('Role already registered. Use --force to overwrite in non-interactive mode.');
+      }
+    }
+  }
+
+  // Save app registration
   const appData = {
     appId: found.appId,
     slug: found.appSlug,
@@ -319,7 +345,6 @@ If the app was created manually, use import-app instead:
     installationId: Number(installationId),
     ...(found.owner && { owner: found.owner }),
   };
-  const appPath = join(appsDir, `${role}.json`);
   writeFileSync(appPath, JSON.stringify(appData, null, 2) + '\n', 'utf-8');
   console.log(`\n✅ App registration saved: ${appPath}`);
 
