@@ -1,28 +1,22 @@
-name: Squad CI
-# Project type was not detected — configure build/test commands below
+name: CI
 
 on:
-  pull_request:
-    branches: [dev, preview, main, insider]
-    types: [opened, synchronize, reopened]
   push:
-    branches: [dev, insider]
-
-permissions:
-  contents: read
+    branches: ["*"]
+  pull_request:
+    branches: [main, insider]
 
 jobs:
   test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build and test
-        run: |
-          # TODO: Project type was not detected — add your build/test commands here
-          # Go:            go test ./...
-          # Python:        pip install -r requirements.txt && pytest
-          # .NET:          dotnet test
-          # Java (Maven):  mvn test
-          # Java (Gradle): ./gradlew test
-          echo "No build commands configured — update squad-ci.yml"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - run: npm test
