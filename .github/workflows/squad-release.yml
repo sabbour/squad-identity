@@ -27,6 +27,13 @@ jobs:
 
       - run: npm test
 
+      # Clear NODE_AUTH_TOKEN so OIDC trusted publishing works
+      # (setup-node injects GITHUB_TOKEN which overrides OIDC)
+      - name: Configure npm for OIDC publishing
+        run: |
+          npm config set //registry.npmjs.org/:_authToken ""
+          unset NODE_AUTH_TOKEN
+
       # On main: publishes with --tag latest (default changesets behavior)
       - name: Create Release PR or Publish (npmjs)
         if: github.ref == 'refs/heads/main'
@@ -38,6 +45,7 @@ jobs:
           commit: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ""
           NPM_CONFIG_PROVENANCE: "true"
 
       # On insider: publishes with --tag insider (pre-release channel)
@@ -51,6 +59,7 @@ jobs:
           commit: "chore: version packages (insider)"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ""
           NPM_CONFIG_PROVENANCE: "true"
 
       # Publish to GitHub Packages (mirror)
