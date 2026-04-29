@@ -38,7 +38,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Sabbour/squad-identity.git"
+    "url": "git+https://github.com/sabbour/squad-identity.git"
   },
   "publishConfig": {
     "access": "public",
