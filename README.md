@@ -4,6 +4,9 @@
 [![CI](https://github.com/Sabbour/squad-identity/actions/workflows/squad-ci.yml/badge.svg)](https://github.com/Sabbour/squad-identity/actions/workflows/squad-ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
+> [!WARNING]
+> **Experimental** — This project is under active development. APIs, config schemas, and CLI commands may change without notice.
+
 > GitHub App bot-identity governance for [Squad](https://github.com/bradygaster/squad) agents.
 
 Every agent-authored GitHub write — PRs, comments, labels, pushes — is attributed
