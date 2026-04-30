@@ -19,25 +19,26 @@ Your GitHub App installation ID is ${installationId}.
 
 You have been issued a scoped token lease. **Never** resolve tokens directly.
 
-To obtain your GitHub token for any API call:
-\`\`\`
-node ${repoRoot}/.squad/scripts/exchange-lease.mjs --scope-id ${scopeId} --role ${role}
-\`\`\`
+To obtain your GitHub token for any API call, use the \`squad_identity_exchange_lease\` tool:
+- scopeId: "${scopeId}"
+- role: "${role}"
 
 Each exchange decrements your operation budget. Use tokens efficiently.
 If exchange fails with "exhausted" or "expired", request a new lease from the coordinator.
 
 ## Attestation Protocol
 
-After ANY GitHub write (PR, comment, push, label), record an attestation:
-\`\`\`
-node ${repoRoot}/.squad/scripts/attest-write.mjs --repo-root ${repoRoot} --owner ${owner} --repo ${repo} --write-type <type> --write-ref <ref> --role-slug ${role} --expected-actor ${appSlug}[bot] --token <your-token>
-\`\`\`
-
-Write types: pr-create, pr-comment, issue-comment, commit-push, label-add
+After ANY GitHub write (PR, comment, push, label), use the \`squad_identity_attest_write\` tool:
+- owner: ${owner}
+- repo: ${repo}
+- writeType: <type> (pr-create | pr-comment | issue-comment | commit-push | label-add)
+- writeRef: <ref>
+- roleSlug: "${role}"
+- expectedActor: "${appSlug}[bot]"
+- token: <your-token>
 
 ## Anti-Patterns (NEVER do these)
-- ❌ Call resolve-token.mjs directly (use exchange-lease instead)
+- ❌ Call resolve-token directly (use exchange-lease tool instead)
 - ❌ Use \`gh\` CLI without GH_TOKEN set to your leased token
 - ❌ Use the human operator's token for any write
 - ❌ Skip attestation after a GitHub write
@@ -59,10 +60,10 @@ export function buildCoordinatorContext({ repoRoot, roles }) {
 
 You manage token leases for your agents. Before spawning any agent that needs GitHub access:
 
-1. Issue a lease:
-   \`\`\`
-   node ${repoRoot}/.squad/scripts/token-lease.mjs --role <role> --max-ops <N> --max-time <seconds>
-   \`\`\`
+1. Issue a lease using the \`squad_identity_token_lease\` tool:
+   - role: <role>
+   - maxOps: <N>
+   - maxTimeSec: <seconds>
 2. Pass the returned scopeId to the agent via their IDENTITY_CONTEXT block.
 3. Monitor lease exhaustion — agents will request new leases when needed.
 

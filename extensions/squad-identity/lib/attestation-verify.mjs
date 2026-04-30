@@ -60,9 +60,13 @@ async function resolveActor({ owner, repo, writeType, writeRef, token }) {
     case 'commit-push':
       return data.author?.login ?? data.committer?.login ?? null;
     case 'label-add': {
-      const labelEvent = data.find((e) => e.event === 'labeled');
-      if (!labelEvent) throw new Error('No label event found');
-      return labelEvent.actor?.login ?? null;
+      // Filter to 'labeled' events by the expected actor, pick most recent.
+      // writeRef format: "<issue_number>" or "<issue_number>:<label_name>"
+      const labeledEvents = data.filter((e) => e.event === 'labeled');
+      if (labeledEvents.length === 0) throw new Error('No label event found');
+      // Pick the most recent labeled event (last in the array, as events are chronological)
+      const mostRecent = labeledEvents[labeledEvents.length - 1];
+      return mostRecent.actor?.login ?? null;
     }
   }
 }

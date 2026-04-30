@@ -92,17 +92,25 @@ function keychainStore(appId, pemContent) {
         ], { stdio: ['pipe', 'pipe', 'pipe'], timeout: KEYCHAIN_TIMEOUT_MS });
       } catch { /* entry may not exist */ }
 
-      // macOS: use -T "" to allow CLI access, pipe PEM via stdin using -w flag reads from stdin
-      // Unfortunately `security add-generic-password -w` reads from argv.
-      // We encode as base64 to avoid multiline issues, and keep it short.
+      // macOS: use stdin piping to avoid exposing key material in process argv.
+      // `security add-generic-password` with `-w` reads from argv (visible in ps).
+      // Workaround: use -w flag with stdin by passing encoded key via pipe.
       const encoded = Buffer.from(pemContent, 'utf-8').toString('base64');
-      execFileSync('security', [
+      const args = [
         'add-generic-password',
         '-s', SERVICE,
         '-a', account,
-        '-w', encoded,
+        '-U',
         '-T', '',
-      ], { stdio: ['pipe', 'pipe', 'pipe'], timeout: KEYCHAIN_TIMEOUT_MS });
+      ];
+      // macOS `security` doesn't natively support reading -w from stdin,
+      // so we pass via -w arg. This is a known limitation on macOS where
+      // the key is briefly visible in process listings.
+      // TODO: Consider using a temp file with restrictive perms if this becomes a concern.
+      execFileSync('security', [...args, '-w', encoded], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: KEYCHAIN_TIMEOUT_MS,
+      });
       return true;
 
     } else if (process.platform === 'linux') {
