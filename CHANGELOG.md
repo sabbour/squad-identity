@@ -1,5 +1,11 @@
 # @sabbour/squad-identity
 
+## 1.4.3
+
+### Patch Changes
+
+- fix(extension): use tools array pattern instead of session.registerTool() and fix lease store TTL cleanup
+
 ## 1.4.0
 
 ### Minor Changes
