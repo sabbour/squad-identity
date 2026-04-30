@@ -298,21 +298,21 @@ async function cmdDoctor() {
     console.log('✅ resolve-token.mjs accessible');
   }
 
-  if (cfg && cfg.apps?.lead) {
-    console.log('\nTesting token resolution for "lead" role...');
+  if (cfg && cfg.apps?.architecture) {
+    console.log('\nTesting token resolution for "architecture" role...');
     try {
       const result = execFileSync(
         process.execPath,
-        [resolveTokenPath, 'lead'],
+        [resolveTokenPath, 'architecture'],
         { encoding: 'utf-8', timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] }
       ).trim();
       if (result && result.length > 0) {
-        console.log('✅ Token resolved for lead (length:', result.length + ')');
+        console.log('✅ Token resolved for architecture (length:', result.length + ')');
       } else {
-        console.log('⚠  Token resolution returned empty for lead');
+        console.log('⚠  Token resolution returned empty for architecture');
       }
     } catch (err) {
-      console.log('❌ Token resolution failed for lead:', err.stderr?.trim() || err.message);
+      console.log('❌ Token resolution failed for architecture:', err.stderr?.trim() || err.message);
       ok = false;
     }
   }
@@ -539,10 +539,10 @@ async function cmdInjectCoordinatorContext() {
   // Find the coordinator/lead agent
   const agentNameMap = cfg.agentNameMap ?? {};
   const leadEntry = Object.entries(agentNameMap).find(
-    ([, slug]) => slug === 'lead' || slug === 'coordinator'
+    ([, slug]) => slug === 'architecture' || slug === 'lead' || slug === 'coordinator'
   );
   if (!leadEntry) {
-    console.error(JSON.stringify({ success: false, error: 'No agent mapped to "lead" or "coordinator" role' }));
+    console.error(JSON.stringify({ success: false, error: 'No agent mapped to "architecture", "lead", or "coordinator" role' }));
     process.exit(1);
   }
 
