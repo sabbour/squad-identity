@@ -396,21 +396,32 @@ function expandHomePath(pathValue) {
   return pathValue;
 }
 
+// Generic person glyph for roles without a dedicated icon
+const GENERIC_GLYPH = "M12 4C14.2091 4 16 5.79086 16 8C16 10.2091 14.2091 12 12 12C9.79086 12 8 10.2091 8 8C8 5.79086 9.79086 4 12 4ZM12 14C16.4183 14 20 15.7909 20 18V20H4V18C4 15.7909 7.58172 14 12 14Z";
+
+// Deterministic color from role slug (seeded hash → hue)
+function roleToColor(role) {
+  let hash = 0;
+  for (let i = 0; i < role.length; i++) {
+    hash = ((hash << 5) - hash + role.charCodeAt(i)) | 0;
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 55%, 45%)`;
+}
+
 function getRoleIconSvg(role) {
   const icon = ROLE_ICONS[role];
-  if (!icon) {
-    return null;
-  }
-
-  const glyphScale = icon.scale ?? 12.5;
-  const glyphX = icon.translateX ?? 82;
-  const glyphY = icon.translateY ?? 66;
+  const path = icon?.path ?? GENERIC_GLYPH;
+  const color = icon?.color ?? roleToColor(role);
+  const glyphScale = icon?.scale ?? 12.5;
+  const glyphX = icon?.translateX ?? 82;
+  const glyphY = icon?.translateY ?? 66;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="${role} app icon">
-  <rect width="512" height="512" fill="${icon.color}"/>
+  <rect width="512" height="512" fill="${color}"/>
   <g transform="translate(${glyphX} ${glyphY}) scale(${glyphScale})" fill="#FFFFFF">
-    <path d="${icon.path}"/>
+    <path d="${path}"/>
   </g>
   <g transform="translate(334 334) scale(5)" fill="#FFFFFF">
     <path d="${SPARKLE_PATH}"/>
@@ -419,7 +430,7 @@ function getRoleIconSvg(role) {
 }
 
 function getRoleBadgeColor(role) {
-  return ROLE_ICONS[role]?.color ?? null;
+  return ROLE_ICONS[role]?.color ?? roleToColor(role);
 }
 
 function renderCompletionPage(appData) {
