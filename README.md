@@ -256,7 +256,7 @@ graph TD
     style I fill:#e8f8e8
 ```
 
-The returned token is used **inline per-call** — never exported, never persisted.
+The returned token is managed via the **lease system** — never returned to the caller, never exposed in tool parameters.
 
 ### How agents learn the protocol
 
@@ -345,7 +345,7 @@ After restarting Copilot CLI, these 7 tools are available in every session:
 
 | Tool | What it does |
 |------|-------------|
-| `squad_identity_resolve_token` | Resolve bot token for the current agent's `ROLE_SLUG` |
+| `squad_identity_resolve_token` | Resolve and lease a bot token for a role. Returns confirmation only — raw token is never exposed. |
 | `squad_identity_rotate_key` | Rotate a GitHub App private key (guided browser + keychain flow) |
 
 **Governance tools:**
@@ -353,7 +353,7 @@ After restarting Copilot CLI, these 7 tools are available in every session:
 | Tool | What it does |
 |------|-------------|
 | `squad_identity_lease_token` | Issue scoped token lease for an agent role (coordinator use only) |
-| `squad_identity_attest_write` | Record and verify bot-authored GitHub writes in audit trail |
+| `squad_identity_attest_write` | Record and verify bot-authored GitHub writes in audit trail (token auto-resolved from roleSlug) |
 
 ---
 

@@ -366,22 +366,33 @@ const session = await joinSession({
       },
       handler: async (input) => {
         try {
-          const resolveScript = join(LIB_DIR, 'resolve-token.mjs');
+          const { resolveTokenWithDiagnostics } = await import(join(LIB_DIR, 'resolve-token.mjs'));
           const roleSlug = input.roleSlug || process.env.ROLE_SLUG || '';
 
-          const { stdout, stderr } = await execFileAsync(
-            NODE_BIN,
-            [resolveScript, roleSlug],
-            { cwd: REPO_ROOT, timeout: 10000 }
-          );
+          if (!roleSlug) {
+            return '❌ No role slug provided. Pass roleSlug or set ROLE_SLUG env var.';
+          }
 
-          if (stderr && _session) _session.log(`[squad-identity] resolve-token stderr: ${stderr}`);
+          const result = await resolveTokenWithDiagnostics(REPO_ROOT, roleSlug);
 
-          if (!stdout || !stdout.trim()) {
+          if (result.error) {
+            return `❌ Token resolution failed for role "${roleSlug}": ${result.error}`;
+          }
+
+          if (!result.token) {
             return '❌ Could not resolve token. Check squad_identity_doctor for diagnostics.';
           }
 
-          return `✅ Token resolved:\n${stdout.trim()}`;
+          // Create a lease so other extensions can use it, but never return the raw token
+          const { createLease } = await import(join(LIB_DIR, 'token-lease-store.mjs'));
+          const lease = createLease({
+            role: result.resolvedRoleKey,
+            token: result.token,
+            maxOps: 500,
+            maxTimeSec: 3500,
+          });
+
+          return `✅ Token resolved and leased for role: ${result.resolvedRoleKey} (lease: ${lease.scopeId}, ops: ${lease.remainingOps}, expires in ~58 min). Other squad tools auto-resolve tokens internally — no need to pass tokens manually.`;
         } catch (err) {
           const msg = err.stderr || err.message || 'unknown error';
           return `❌ Token resolution failed: ${msg}`;
@@ -516,19 +527,22 @@ const session = await joinSession({
             type: 'string',
             description: 'Expected GitHub actor (e.g., "sqd-backend[bot]").',
           },
-          token: {
-            type: 'string',
-            description: 'GitHub token used for the write operation.',
-          },
           verify: {
             type: 'boolean',
             description: 'Whether to verify the attestation after recording. Default: true.',
           },
         },
-        required: ['owner', 'repo', 'writeType', 'writeRef', 'roleSlug', 'expectedActor', 'token'],
+        required: ['owner', 'repo', 'writeType', 'writeRef', 'roleSlug', 'expectedActor'],
       },
       handler: async (input) => {
         try {
+          // Auto-resolve token for the role
+          const { resolveToken } = await import(join(LIB_DIR, 'resolve-token.mjs'));
+          const token = await resolveToken(REPO_ROOT, input.roleSlug);
+          if (!token) {
+            return `❌ Could not resolve token for role "${input.roleSlug}".`;
+          }
+
           const attestScript = join(LIB_DIR, 'attest-write.mjs');
           const verify = input.verify ?? true;
 
@@ -541,7 +555,7 @@ const session = await joinSession({
             '--write-ref', input.writeRef,
             '--role-slug', input.roleSlug,
             '--expected-actor', input.expectedActor,
-            '--token', input.token,
+            '--token', token,
           ];
           if (!verify) args.push('--no-verify');
 
