@@ -78,9 +78,9 @@ describe('configure-identity: --update-charters', () => {
     // Add some app registrations so role inference works
     const appsDir = join(dir, '.squad', 'identity', 'apps');
     mkdirSync(appsDir, { recursive: true });
-    writeFileSync(join(appsDir, 'lead.json'), JSON.stringify({ appId: 1001, appSlug: 'squad-identity-lead' }));
-    writeFileSync(join(appsDir, 'backend.json'), JSON.stringify({ appId: 1002, appSlug: 'squad-identity-backend' }));
-    writeFileSync(join(appsDir, 'frontend.json'), JSON.stringify({ appId: 1003, appSlug: 'squad-identity-frontend' }));
+    writeFileSync(join(appsDir, 'lead.json'), JSON.stringify({ appId: 1001, appSlug: 'sqd-lead' }));
+    writeFileSync(join(appsDir, 'backend.json'), JSON.stringify({ appId: 1002, appSlug: 'sqd-backend' }));
+    writeFileSync(join(appsDir, 'frontend.json'), JSON.stringify({ appId: 1003, appSlug: 'sqd-frontend' }));
   });
 
   after(() => {

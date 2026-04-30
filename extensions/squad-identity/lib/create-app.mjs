@@ -219,9 +219,9 @@ const HELP_TEXT = `Usage: squad-identity create-app --role <role> [--owner <user
 
 Options:
   --role <role>      Required. One of: ${Object.keys(ROLE_CONFIG).join(", ")}
-  --name <name>      Override the generated app name (default: {prefix}-squad-{role})
+  --name <name>      Override the generated app name (default: {prefix}-{role})
   --owner <owner>    GitHub username used for the app homepage URL (default: gh api user --jq .login)
-  --prefix <prefix>  App name prefix (default: squad)
+  --prefix <prefix>  App name prefix (default: sqd)
   --icon             Show a generated avatar preview + PNG download on success
   --icon-only        Skip app creation and only open the generated icon preview
   --generate-key     Open the existing app settings page so you can generate a private key manually
@@ -238,7 +238,7 @@ function fail(message) {
 }
 
 function parseArgs(argv) {
-  const values = { prefix: "squad" };
+  const values = {};
   const valueFlags = new Set(["--role", "--owner", "--prefix", "--import-key", "--name"]);
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -949,7 +949,7 @@ async function main() {
   }
 
   if (args.iconOnly) {
-    const previewSlug = `${args.prefix ?? "squad"}-${args.role}`;
+    const previewSlug = `${args.prefix ?? "sqd"}-${args.role}`;
     await serveIconOnlyPreview(args.role, previewSlug);
     console.log(`Icon generated for role: ${args.role}. Download the PNG from the browser.`);
     return;
@@ -985,7 +985,7 @@ async function main() {
 
   ensureGhAvailable();
 
-  const prefix = args.prefix ?? "squad";
+  const prefix = args.prefix ?? owner;
   const roleConfig = ROLE_CONFIG[args.role];
   const appName = args.name ?? `${prefix}-${args.role}`;
 

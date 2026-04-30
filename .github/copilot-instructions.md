@@ -37,7 +37,7 @@ Agents derive their identity by:
 2. Finding their GitHub App ID for that role slug
 3. Resolving the PEM key from OS keychain (keyed by app ID) or environment variables
 
-The role slug is injected into each agent's charter by `configure-identity.mjs --update-charters` during setup. Example: an agent named "Tank" with role "Backend Dev" might map to role slug `backend`, using app `squad-identity-backend[bot]`.
+The role slug is injected into each agent's charter by `configure-identity.mjs --update-charters` during setup. Example: an agent named "Tank" with role "Backend Dev" might map to role slug `backend`, using app `sqd-backend[bot]`.
 
 ### Installation
 

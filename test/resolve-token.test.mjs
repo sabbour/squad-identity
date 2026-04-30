@@ -148,14 +148,14 @@ test('Config file structure', async t => {
   await t.test('parses app registration with required fields', () => {
     const appReg = {
       appId: 12345,
-      appSlug: 'squad-identity-backend',
+      appSlug: 'sqd-backend',
       installationId: 98765,
     };
     const json = JSON.stringify(appReg);
     const parsed = JSON.parse(json);
 
     assert.strictEqual(parsed.appId, 12345);
-    assert.strictEqual(parsed.appSlug, 'squad-identity-backend');
+    assert.strictEqual(parsed.appSlug, 'sqd-backend');
     assert.strictEqual(parsed.installationId, 98765);
   });
 

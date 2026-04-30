@@ -647,8 +647,8 @@ After any GitHub write (PR creation, comment, push, label), agents record:
   "repo": "myrepo",
   "write_ref": "42",
   "role_slug": "backend",
-  "expected_actor": "squad-identity-backend[bot]",
-  "actual_actor": "squad-identity-backend[bot]",
+  "expected_actor": "sqd-backend[bot]",
+  "actual_actor": "sqd-backend[bot]",
   "actor_match": true
 }
 ```
@@ -661,7 +661,7 @@ squad-identity attest-write \
   --owner myorg --repo myrepo \
   --write-type pr-create --write-ref 42 \
   --role-slug backend \
-  --expected-actor "squad-identity-backend[bot]" \
+  --expected-actor "sqd-backend[bot]" \
   --token ghs_xxx
 ```
 

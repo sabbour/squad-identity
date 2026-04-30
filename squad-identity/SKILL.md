@@ -118,7 +118,7 @@ squad_identity_attest_write \
   owner="myorg" repo="myrepo" \
   writeType="pr-create" writeRef="42" \
   roleSlug="<from charter>" \
-  expectedActor="squad-identity-<role>[bot]" \
+  expectedActor="sqd-<role>[bot]" \
   token="$TOKEN" \
   verify="true"
 ```

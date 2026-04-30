@@ -391,7 +391,7 @@ Call \`squad_identity_update_copilot_instructions\` to restore the identity bloc
         },
         expectedActor: {
           type: 'string',
-          description: 'Expected GitHub actor (e.g., "squad-identity-backend[bot]").',
+          description: 'Expected GitHub actor (e.g., "sqd-backend[bot]").',
         },
         token: {
           type: 'string',

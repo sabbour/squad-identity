@@ -9,63 +9,63 @@
     "_comment": "One entry per role slug. Fill in appId, appSlug, installationId from your GitHub Apps.",
     "lead": {
       "appId": 0,
-      "appSlug": "your-squad-lead",
+      "appSlug": "sqd-lead",
       "installationId": 0,
       "roleSlug": "lead",
       "tier": "per-role"
     },
     "frontend": {
       "appId": 0,
-      "appSlug": "your-squad-frontend",
+      "appSlug": "sqd-frontend",
       "installationId": 0,
       "roleSlug": "frontend",
       "tier": "per-role"
     },
     "backend": {
       "appId": 0,
-      "appSlug": "your-squad-backend",
+      "appSlug": "sqd-backend",
       "installationId": 0,
       "roleSlug": "backend",
       "tier": "per-role"
     },
     "tester": {
       "appId": 0,
-      "appSlug": "your-squad-tester",
+      "appSlug": "sqd-tester",
       "installationId": 0,
       "roleSlug": "tester",
       "tier": "per-role"
     },
     "security": {
       "appId": 0,
-      "appSlug": "your-squad-security",
+      "appSlug": "sqd-security",
       "installationId": 0,
       "roleSlug": "security",
       "tier": "per-role"
     },
     "codereview": {
       "appId": 0,
-      "appSlug": "your-squad-codereview",
+      "appSlug": "sqd-codereview",
       "installationId": 0,
       "roleSlug": "codereview",
       "tier": "per-role"
     },
     "devops": {
       "appId": 0,
-      "appSlug": "your-squad-devops",
+      "appSlug": "sqd-devops",
       "installationId": 0,
       "roleSlug": "devops",
       "tier": "per-role"
     },
     "docs": {
       "appId": 0,
-      "appSlug": "your-squad-docs",
+      "appSlug": "sqd-docs",
       "installationId": 0,
       "roleSlug": "docs",
       "tier": "per-role"
     },
     "scribe": {
       "appId": 0,
-      "appSlug": "your-squad-scribe",
+      "appSlug": "sqd-scribe",
       "installationId": 0,
       "roleSlug": "scribe",
       "tier": "per-role"
