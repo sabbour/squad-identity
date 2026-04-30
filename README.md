@@ -57,16 +57,22 @@ Once you have agents with roles in `.squad/team.md`, proceed to Step 1.
 ### Step 1: Install and configure squad-identity
 
 ```bash
-# Install squad-identity
+# Install squad-identity globally (required — provides the `squad-identity` command)
 npm install -g @sabbour/squad-identity
 
-# Recommended: run guided setup in your Squad repo (from within the repo directory)
+# Run guided setup from within your Squad repo
+cd /path/to/your-project
 squad-identity setup
 ```
 
-`setup` runs the full flow end-to-end and is safe to re-run.
+> **⚠️ Global install is required.** `squad-identity` is a CLI tool that manages
+> GitHub App credentials in your OS keychain and copies extension files into
+> target repos. It must be installed globally (`-g`) so it's available across
+> all your Squad projects.
 
-If you only want to install the extension/skill/config without the guided app flow, use:
+`setup` runs the full flow end-to-end and is safe to re-run (idempotent).
+
+If you only want to install the extension/skill/config without the guided app flow:
 
 ```bash
 squad-identity init
@@ -180,6 +186,8 @@ Pre-made, shared GitHub Apps with the `sqd-*` naming convention:
 |---------|----------------|-----------|
 | Stable (default) | `npm i -g @sabbour/squad-identity` | Production-ready, fully tested |
 | Insider | `npm i -g @sabbour/squad-identity@insider` | Latest features, may have rough edges |
+
+> Always install globally (`-g`). Local installs are not supported.
 
 Work lands on `insider` first, then promotes to `main` when stable.
 
