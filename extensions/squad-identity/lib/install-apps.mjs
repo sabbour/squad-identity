@@ -32,8 +32,8 @@ function fail(message) {
 }
 
 function parseArgs(argv) {
-  const values = { check: false, role: null };
-  const valueFlags = new Set(["--role"]);
+  const values = { check: false, roles: [] };
+  const valueFlags = new Set(["--role", "--roles"]);
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -62,8 +62,12 @@ function parseArgs(argv) {
       fail(`Missing value for ${flag}.`);
     }
 
-    if (flag === "--role") {
-      values.role = nextValue;
+    if (flag === "--role" || flag === "--roles") {
+      // Support comma-separated: --roles lead,backend,tester
+      for (const r of nextValue.split(',')) {
+        const trimmed = r.trim();
+        if (trimmed) values.roles.push(trimmed);
+      }
     }
 
     if (inlineValue === undefined) {
@@ -267,23 +271,27 @@ function getOriginRepo(projectRoot) {
   return parseGitHubRemote(result.stdout ?? "");
 }
 
-function getConfiguredApps(registrations, usedIdentitySlugs, selectedRole) {
+function getConfiguredApps(registrations, usedIdentitySlugs, selectedRoles) {
   if (!registrations.size) {
     fail("No app registrations found in .squad/identity/apps/.");
   }
 
-  // When a specific role is requested, bypass team roster matching — the caller
-  // (e.g., setup) already decided this role is needed.
-  if (selectedRole) {
-    const reg = registrations.get(selectedRole);
-    if (!reg) {
-      fail(`Role "${selectedRole}" has no registration in .squad/identity/apps/${selectedRole}.json.`);
+  // When specific roles are requested, bypass team roster matching — the caller
+  // (e.g., setup) already decided these roles are needed.
+  if (selectedRoles && selectedRoles.length > 0) {
+    const apps = [];
+    for (const role of selectedRoles) {
+      const reg = registrations.get(role);
+      if (!reg) {
+        fail(`Role "${role}" has no registration in .squad/identity/apps/${role}.json.`);
+      }
+      const appSlug = reg.slug ?? reg.appSlug ?? null;
+      if (!appSlug) {
+        fail(`No slug found for role "${role}" in .squad/identity/apps/${role}.json.`);
+      }
+      apps.push({ role, appSlug });
     }
-    const appSlug = reg.slug ?? reg.appSlug ?? null;
-    if (!appSlug) {
-      fail(`No slug found for role "${selectedRole}" in .squad/identity/apps/${selectedRole}.json.`);
-    }
-    return [{ role: selectedRole, appSlug }];
+    return apps;
   }
 
   if (!usedIdentitySlugs.size) {
@@ -405,7 +413,7 @@ async function main() {
 
   const origin = getOriginRepo(projectRoot);
   const usedIdentitySlugs = getUsedIdentitySlugs(projectRoot, registrations);
-  const apps = getConfiguredApps(registrations, usedIdentitySlugs, args.role);
+  const apps = getConfiguredApps(registrations, usedIdentitySlugs, args.roles);
 
   const missingApps = [];
   const rows = apps.map(app => {

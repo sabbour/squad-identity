@@ -238,11 +238,9 @@ function printNextSteps() {
 
 Next steps:
   1. Restart Copilot CLI to load the extension
-  2. Call: squad_identity_setup_steps
-     (for first-time setup with no GitHub Apps yet)
-  3. Or if Apps already exist:
-     squad_identity_update_charters
-     squad_identity_doctor
+  2. Run: squad-identity setup
+     (guided flow: creates apps, installs, configures charters)
+  3. Or use the extension tool: squad_identity_setup
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 }
 
@@ -478,12 +476,9 @@ async function cmdSetup(args) {
     console.log('✅ No app installs pending — skipping install phase.');
   } else {
     console.log(`📦 Roles needing installation: ${rolesToInstall.join(', ')}\n`);
-    for (const role of rolesToInstall) {
-      console.log(`━━━ Installing app for role: ${role} ━━━\n`);
-      const result = runLibScript('install-apps.mjs', ['--role', role], target);
-      if ((result.status ?? EXIT_SYSTEM) !== 0) {
-        console.error(`⚠️  Install step failed for ${role}. Continuing...\n`);
-      }
+    const result = runLibScript('install-apps.mjs', ['--roles', rolesToInstall.join(',')], target);
+    if ((result.status ?? EXIT_SYSTEM) !== 0) {
+      console.error(`⚠️  Install step failed. Continuing...\n`);
     }
   }
 
