@@ -1,4 +1,8 @@
-# squad-identity
+# @sabbour/squad-identity
+
+[![npm version](https://img.shields.io/npm/v/%40sabbour%2Fsquad-identity)](https://www.npmjs.com/package/@sabbour/squad-identity)
+[![CI](https://github.com/Sabbour/squad-identity/actions/workflows/squad-ci.yml/badge.svg)](https://github.com/Sabbour/squad-identity/actions/workflows/squad-ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 > GitHub App bot-identity governance for [Squad](https://github.com/bradygaster/squad) agents.
 
@@ -149,34 +153,6 @@ creation for those roles.
 
 ---
 
-## GitHub Apps: custom (recommended) vs. public (future)
-
-`squad-identity` supports two GitHub App deployment modes:
-
-### Primary: Custom apps (create your own)
-
-Create your own dedicated GitHub Apps with naming pattern `{your-github-username}-<role>`:
-- Use this for all production and active development deployments
-- Examples: `alice-backend[bot]`, `devteam-frontend[bot]`, `myorg-security[bot]`, etc.
-- Created on-demand via `squad-identity create-app --role <role>`
-- You own and control the PEM keys in your OS keychain
-
-**Why:** GitHub App PEM private keys belong to the app owner and cannot be shared. There is no way to securely provide a shared PEM without a central token broker service. Each user must create their own GitHub Apps.
-
-### Optional: Public apps (`sqd-*` — future possibility)
-
-Pre-made, shared GitHub Apps with the `sqd-*` naming convention:
-- `sqd-lead[bot]`, `sqd-backend[bot]`, `sqd-frontend[bot]`, `sqd-tester[bot]`, etc.
-- Created and maintained by the Squad team
-- Available in the future if a token broker service is built
-- Not recommended for current use (no PEM distribution mechanism)
-
-**How to choose:**
-- **All current users:** Create custom apps via `squad-identity create-app --role <role>`
-- **Future (if broker service exists):** Option to install pre-made `sqd-*` public apps
-
----
-
 | Channel | Install command | Stability |
 |---------|----------------|-----------|
 | Stable (default) | `npm i -g @sabbour/squad-identity` | Production-ready, fully tested |
@@ -198,13 +174,16 @@ squad-identity upgrade
 - `.squad/identity/config.json` — your agent-to-role mappings
 - `.squad/identity/apps/*.json` — app registrations
 - PEM keys in the OS keychain
-- Agent charters (ROLE_SLUG injections)
 
-### What's refreshed
+### What's refreshed by upgrade
 
 - `.github/extensions/squad-identity/` — extension code and lib scripts
 - `.squad/skills/squad-identity/SKILL.md` — protocol reference
 - `.github/copilot-instructions.md` — identity block re-injected
+
+### What's refreshed by setup (in addition to the above)
+
+- Agent charters — `ROLE_SLUG` line re-injected into each `charter.md`
 
 ### When to re-run setup
 
@@ -558,24 +537,6 @@ Each app gets a suggested avatar icon during creation:
 
 The icon is shown on the completion page as a downloadable PNG. Upload it as
 your app's avatar in GitHub App settings.
-
----
-
-## Upgrading
-
-```bash
-npm install -g @sabbour/squad-identity@latest
-squad-identity upgrade
-```
-
-`upgrade` refreshes extension files and reapplies the identity block in
-`copilot-instructions.md`. It never touches `config.json` or keychain keys.
-
-If roles or charters changed:
-
-```bash
-squad_identity_configure
-```
 
 ---
 
