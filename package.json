@@ -1,6 +1,6 @@
 {
   "name": "@sabbour/squad-identity",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "GitHub App bot-identity governance for Squad agents. Ensures every git write uses the correct App[bot] identity, not the operator's personal token.",
   "type": "module",
   "bin": {
