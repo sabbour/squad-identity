@@ -340,7 +340,7 @@ async function resolveTokenWithDiagnostics(projectRoot, roleKey) {
       resolvedRoleKey,
       error: `No private key found for role "${resolvedRoleKey}" (app ID: ${reg.appId}).\n` +
         'Credentials are resolved from: (1) environment variables, (2) OS keychain.\n' +
-        'Run create-app.mjs to create a GitHub App and store the key in your keychain,\n' +
+        `Run squad-identity create-app --role ${resolvedRoleKey} to create a GitHub App and store the key in your keychain,\n` +
         'or use sync-secrets.mjs to set up environment variables for CI/CD.' +
         noKeychainHint,
     };

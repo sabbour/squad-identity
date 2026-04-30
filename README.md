@@ -102,6 +102,16 @@ squad-identity doctor
 5. Captures installation IDs
 6. Injects `ROLE_SLUG` into each agent's charter
 
+#### Create a single app
+
+To create a GitHub App for one role without running the full guided setup:
+
+```bash
+squad-identity create-app --role backend
+```
+
+This opens the GitHub manifest flow in your browser. The PEM key is stored in the OS keychain automatically.
+
 #### Already have GitHub Apps?
 
 If you already have GitHub Apps created (from a previous repo, manually, or from
@@ -296,6 +306,7 @@ curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/{owner}/{rep
 |---------|-------------|
 | `squad-identity init [repo]` | Install extension, skill, and config template into a Squad repo |
 | `squad-identity setup [repo]` | Guided setup: discover roles, create/import apps, install, update charters |
+| `squad-identity create-app --role <r>` | Create a new GitHub App for a single role (browser manifest flow) |
 | `squad-identity find-app --name <n>` | Find an existing GitHub App by name, install it, register for a role |
 | `squad-identity import-app --role <r>` | Register an existing GitHub App for a role (provide app ID, slug, PEM) |
 | `squad-identity upgrade [repo]` | Refresh extension files and copilot-instructions identity block |
@@ -381,7 +392,7 @@ PEM private keys are stored in the **OS keychain** — never on the filesystem.
 | 1 | Environment variables | CI/CD: `SQUAD_{ROLE}_APP_ID`, `SQUAD_{ROLE}_PRIVATE_KEY`, `SQUAD_{ROLE}_INSTALLATION_ID` |
 | 2 | OS keychain | Local: macOS Keychain (`security`) · Linux/WSL libsecret (`secret-tool`) |
 
-When `squad-identity setup` or `create-app.mjs` creates an app, the PEM key goes
+When `squad-identity setup` or `squad-identity create-app` creates an app, the PEM key goes
 straight into the OS keychain (keyed by app ID). No `.pem` file is left on disk.
 
 ### Syncing to CI/CD
@@ -397,7 +408,7 @@ squad-identity sync-secrets --check  # dry-run
 
 ## GitHub App creation details
 
-`squad-identity setup` (or `create-app.mjs` for a single role) uses GitHub's
+`squad-identity setup` (or `squad-identity create-app` for a single role) uses GitHub's
 [app manifest flow](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest):
 
 1. Starts a local HTTP server on `localhost:3456`

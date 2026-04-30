@@ -22,7 +22,7 @@ Each layer is upgrade-proof and independent. Agents use `squad_identity_*` tools
 
 | File | Purpose |
 |------|---------|
-| `bin/squad-identity.mjs` | CLI dispatcher; entry point for `squad-identity init/setup/upgrade/doctor/status/rotate-key` |
+| `bin/squad-identity.mjs` | CLI dispatcher; entry point for `squad-identity init/setup/create-app/find-app/import-app/upgrade/rotate-key/doctor/status` |
 | `extensions/squad-identity/extension.mjs` | Registers 8 tools; tools call lib scripts directly |
 | `extensions/squad-identity/lib/*.mjs` | 6 lib scripts: configure-identity, create-app, install-apps, resolve-token, keychain, sync-secrets |
 | `squad-identity/SKILL.md` | Agent protocol; read by agents at spawn time (Steps A–C, anti-patterns) |
@@ -96,7 +96,7 @@ PEM keys are stored in the **OS keychain** — never on the filesystem:
 1. **Environment variables** (CI/CD): `SQUAD_{ROLE}_APP_ID`, `SQUAD_{ROLE}_PRIVATE_KEY`, `SQUAD_{ROLE}_INSTALLATION_ID`
 2. **OS keychain** (local): macOS Keychain, Linux libsecret (keyed by app ID)
 
-**No filesystem PEM storage.** Keys are stored in the keychain when created via `create-app.mjs`.
+**No filesystem PEM storage.** Keys are stored in the keychain when created via `squad-identity create-app`.
 
 ## Expected File Locations (After Init)
 
