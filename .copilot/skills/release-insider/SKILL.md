@@ -29,23 +29,12 @@ git checkout -b squad/{issue-number}-{slug}
 
 ### 2. Add a Changeset for Your Changes
 
-Before pushing, run:
+Follow the **changeset-automation** skill (`.copilot/skills/changeset-automation/SKILL.md`) to create the changeset file. In brief:
 
-```bash
-npx changeset
-```
+1. Create `.changeset/{kebab-case-slug}.md` with the package name, bump type, and a one-line summary
+2. Commit it: `git add .changeset/{slug}.md && git commit -m "changeset: {brief description}"`
 
-This opens a prompt:
-- **Select packages:** Choose the affected package (usually `@sabbour/squad-identity`)
-- **Bump type:** Select `minor` (new feature) or `patch` (fix)
-- **Summary:** Describe the change in one sentence
-
-The changeset file is created in `.changeset/{generated-id}.md`. Commit it:
-
-```bash
-git add .changeset/{generated-id}.md
-git commit -m "changeset: describe your change"
-```
+Do NOT run `npx changeset` — it requires interactive input. Write the file directly.
 
 ### 3. Push and Create PR
 
@@ -85,10 +74,18 @@ git checkout insider && git pull origin insider
 git checkout -b squad/123-fix-token-resolution
 
 # Make your changes
-npx changeset
-# → select package, patch bump, enter "fix: token resolution for leased identities"
-
 git add -A && git commit -m "fix: token resolution for leased identities"
+
+# Create changeset file (see changeset-automation skill)
+cat > .changeset/fix-token-resolution.md << 'EOF'
+---
+"@sabbour/squad-identity": patch
+---
+
+Fix token resolution for leased identities
+EOF
+
+git add .changeset/fix-token-resolution.md && git commit -m "changeset: fix token resolution for leased identities"
 git push -u origin squad/123-fix-token-resolution
 
 gh pr create --base insider --title "fix: token resolution" --body "Closes #123"
@@ -101,7 +98,8 @@ gh pr create --base insider --title "fix: token resolution" --body "Closes #123"
 ## Anti-Patterns
 
 - ❌ **Manual version bumping** — Never edit `package.json` version directly. Changesets handles all versioning.
-- ❌ **Skipping changesets** — Every user-visible change needs a changeset entry; CI will fail if missing.
+- ❌ **Skipping changesets** — Every user-visible change needs a changeset file. See the changeset-automation skill.
+- ❌ **Running `npx changeset` interactively** — Write the `.changeset/*.md` file directly instead.
 - ❌ **Publishing from local machine** — Never run `npm publish` manually. Let CI do it after PR merge.
 - ❌ **Branching from `main` for insider work** — Always branch from `insider`; changes to `main` are for stable only.
 - ❌ **Forgetting the changeset commit** — The changeset file must be committed and pushed; CI won't see it otherwise.
