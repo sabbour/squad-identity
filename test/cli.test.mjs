@@ -282,8 +282,8 @@ describe('CLI: setup preflight', () => {
     const dir = createFixtureRepo({ teamMd: true });
     try {
       // Skip all roles
-      const { stdout } = runCli(['setup', dir], { input: 's\ns\ns\ns\ns\ns\ns\ns\ns\n' });
-      assert.ok(stdout.includes('Skipped') || stdout.includes('skip'),
+      const { stderr } = runCli(['setup', dir], { input: 's\ns\ns\ns\ns\ns\ns\ns\ns\n' });
+      assert.ok(stderr.includes('Skipped') || stderr.includes('skip') || stderr.includes('⏭'),
         'should indicate skipping');
       // No apps should exist
       assert.ok(!existsSync(join(dir, '.squad', 'identity', 'apps')),

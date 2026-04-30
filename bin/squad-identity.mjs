@@ -13,6 +13,12 @@ const VERSION = '1.0.0';
 const EXIT_USER = 1;
 const EXIT_SYSTEM = 2;
 
+// Global --json flag: human commands emit progress to stderr, JSON to stdout only with --json
+const JSON_FLAG = process.argv.includes('--json');
+
+/** Write progress/status to stderr (keeps stdout clean for --json output). */
+function log(msg) { process.stderr.write(msg + '\n'); }
+
 const ROLE_KEYWORDS = {
   lead: ['lead', 'architect', 'tech lead', 'principal', 'staff'],
   frontend: ['frontend', 'ui', 'design', 'front-end'],
@@ -222,12 +228,12 @@ function syncInstallFiles(target, { includeIdentityConfig }) {
   mkdirSync(targetExtLib, { recursive: true });
   copyFileSync(join(sourceExtDir, 'extension.mjs'), join(targetExtDir, 'extension.mjs'));
   copyMjsDir(sourceExtLib, targetExtLib);
-  console.log(`✅ Extension installed → ${targetExtDir}`);
+  log(`✅ Extension installed → ${targetExtDir}`);
 
   const skillDir = join(target, '.squad', 'skills', 'squad-identity');
   mkdirSync(skillDir, { recursive: true });
   copyFileSync(join(PACKAGE_ROOT, 'squad-identity', 'SKILL.md'), join(skillDir, 'SKILL.md'));
-  console.log(`✅ Skill installed    → ${join(skillDir, 'SKILL.md')}`);
+  log(`✅ Skill installed    → ${join(skillDir, 'SKILL.md')}`);
 
   const identityDir = join(target, '.squad', 'identity');
   const configFile = join(identityDir, 'config.json');
@@ -236,9 +242,9 @@ function syncInstallFiles(target, { includeIdentityConfig }) {
   if (includeIdentityConfig) {
     if (!existsSync(configFile)) {
       copyFileSync(join(PACKAGE_ROOT, 'identity', 'config.json.template'), configFile);
-      console.log(`✅ Identity config    → ${configFile} (template — fill in your app details)`);
+      log(`✅ Identity config    → ${configFile} (template — fill in your app details)`);
     } else {
-      console.log('✓  Identity config already exists — not overwritten');
+      log('✓  Identity config already exists — not overwritten');
     }
   }
 
@@ -265,7 +271,7 @@ function runConfigureForUpgrade(flag, cwd) {
 }
 
 function printNextSteps() {
-  console.log(`
+  log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ squad-identity installed successfully.
 
@@ -355,13 +361,13 @@ async function importExistingAppForRole(target, role, ask) {
   if (importResult.status !== 0) {
     console.error(`    ⚠️  PEM import failed for ${role}. Registration saved — run rotate-key later.\n`);
   } else {
-    console.log(`    ✅ Imported existing app for ${role}\n`);
+    log(`    ✅ Imported existing app for ${role}\n`);
   }
 }
 
 function createAppForRole(target, role) {
   const createApp = join(PACKAGE_ROOT, 'extensions', 'squad-identity', 'lib', 'create-app.mjs');
-  console.log(`\n━━━ Creating app for role: ${role} ━━━\n`);
+  log(`\n━━━ Creating app for role: ${role} ━━━\n`);
   const result = spawnSync(process.execPath, [createApp, '--role', role, '--icon'], {
     cwd: target,
     stdio: 'inherit',
@@ -385,26 +391,28 @@ function rotateKeyForRole(role, target) {
 function cmdInit(args) {
   if (args.includes('--help') || args.includes('-h')) return printCommandHelp('init');
   const target = resolveTarget(args);
-  console.log(`🔧 Installing squad-identity into: ${target}\n`);
+  log(`🔧 Installing squad-identity into: ${target}\n`);
   try {
     syncInstallFiles(target, { includeIdentityConfig: true });
     printNextSteps();
   } catch (err) {
     failSystem(err.message);
   }
+  return { initialized: true, target };
 }
 
 function cmdUpgrade(args) {
   if (args.includes('--help') || args.includes('-h')) return printCommandHelp('upgrade');
   const target = resolveTarget(args);
-  console.log(`🔧 Upgrading squad-identity in: ${target}\n`);
+  log(`🔧 Upgrading squad-identity in: ${target}\n`);
   try {
     syncInstallFiles(target, { includeIdentityConfig: false });
   } catch (err) {
     failSystem(err.message);
   }
   runConfigureForUpgrade('--update-copilot-instructions', target);
-  console.log('\n✅ squad-identity upgrade complete.');
+  log('\n✅ squad-identity upgrade complete.');
+  return { upgraded: true, target };
 }
 
 async function cmdSetup(args) {
@@ -414,7 +422,7 @@ async function cmdSetup(args) {
   const target = resolveTarget(args);
   const configure = join(PACKAGE_ROOT, 'extensions', 'squad-identity', 'lib', 'configure-identity.mjs');
 
-  console.log('\n━━━ Phase 1: Initialize ━━━\n');
+  log('\n━━━ Phase 1: Initialize ━━━\n');
   const extDir = join(target, '.github', 'extensions', 'squad-identity');
   const skillPath = join(target, '.squad', 'skills', 'squad-identity', 'SKILL.md');
   const configPath = join(target, '.squad', 'identity', 'config.json');
@@ -422,35 +430,35 @@ async function cmdSetup(args) {
 
   if (needsInit) {
     if (force) {
-      console.log('🔧 --force enabled; reapplying install files.\n');
+      log('🔧 --force enabled; reapplying install files.\n');
     } else {
-      console.log('🔧 Installing missing setup files.\n');
+      log('🔧 Installing missing setup files.\n');
     }
     syncInstallFiles(target, { includeIdentityConfig: true });
   } else {
-    console.log('✅ Extension, skill, and identity config already present — skipping init.');
+    log('✅ Extension, skill, and identity config already present — skipping init.');
   }
 
-  console.log('\n━━━ Phase 2: Discover roles ━━━\n');
+  log('\n━━━ Phase 2: Discover roles ━━━\n');
   const neededRoles = discoverNeededRoles(target);
   const keychainModule = await loadKeychainModule();
   let registrations = loadAppRegistrations(target);
   const roleStatuses = new Map();
 
-  console.log(`🔍 Discovered ${neededRoles.length} roles from .squad/team.md:\n`);
+  log(`🔍 Discovered ${neededRoles.length} roles from .squad/team.md:\n`);
   for (const role of neededRoles) {
     const status = await checkRoleStatus(target, role, registrations.get(role), keychainModule);
     roleStatuses.set(role, status);
-    console.log(`   ${role.padEnd(12)} ${formatRoleStatus(status)}`);
+    log(`   ${role.padEnd(12)} ${formatRoleStatus(status)}`);
   }
 
-  console.log('\n━━━ Phase 3: Create or register apps ━━━\n');
+  log('\n━━━ Phase 3: Create or register apps ━━━\n');
   const rolesToPrompt = force
     ? neededRoles
     : neededRoles.filter(role => ['needs_creation', 'needs_pem'].includes(roleStatuses.get(role)));
 
   if (rolesToPrompt.length === 0) {
-    console.log('✅ All roles already have an app registration and PEM — skipping app prompts.');
+    log('✅ All roles already have an app registration and PEM — skipping app prompts.');
   } else {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     const ask = (q) => new Promise(res => rl.question(q, res));
@@ -460,7 +468,7 @@ async function cmdSetup(args) {
         const currentStatus = roleStatuses.get(role);
 
         if (currentStatus === 'needs_pem') {
-          console.log(`  ${role}: app exists but PEM is missing.`);
+          log(`  ${role}: app exists but PEM is missing.`);
           const choice = await ask('    [R]otate key / [i]mport existing / [s]kip? ');
           const selected = choice.trim().toLowerCase();
 
@@ -469,13 +477,13 @@ async function cmdSetup(args) {
           } else if (selected === 'i') {
             await importExistingAppForRole(target, role, ask);
           } else {
-            console.log(`    ⏭️  Skipped ${role}\n`);
+            log(`    ⏭️  Skipped ${role}\n`);
           }
         } else {
           if (currentStatus === 'fully_configured') {
-            console.log(`  ${role}: already fully configured.`);
+            log(`  ${role}: already fully configured.`);
           } else if (currentStatus === 'needs_install') {
-            console.log(`  ${role}: app + PEM already present; install still needed.`);
+            log(`  ${role}: app + PEM already present; install still needed.`);
           }
 
           const choice = await ask(`  ${role}: [C]reate / [i]mport / [s]kip? `);
@@ -484,7 +492,7 @@ async function cmdSetup(args) {
           if (selected === 'i') {
             await importExistingAppForRole(target, role, ask);
           } else if (selected === 's') {
-            console.log(`    ⏭️  Skipped ${role}\n`);
+            log(`    ⏭️  Skipped ${role}\n`);
           } else {
             createAppForRole(target, role);
           }
@@ -498,7 +506,7 @@ async function cmdSetup(args) {
     }
   }
 
-  console.log('\n━━━ Phase 4: Install apps ━━━\n');
+  log('\n━━━ Phase 4: Install apps ━━━\n');
   registrations = loadAppRegistrations(target);
   for (const role of neededRoles) {
     roleStatuses.set(role, await checkRoleStatus(target, role, registrations.get(role), keychainModule));
@@ -506,16 +514,16 @@ async function cmdSetup(args) {
 
   const rolesToInstall = neededRoles.filter(role => roleStatuses.get(role) === 'needs_install');
   if (rolesToInstall.length === 0) {
-    console.log('✅ No app installs pending — skipping install phase.');
+    log('✅ No app installs pending — skipping install phase.');
   } else {
-    console.log(`📦 Roles needing installation: ${rolesToInstall.join(', ')}\n`);
+    log(`📦 Roles needing installation: ${rolesToInstall.join(', ')}\n`);
     const result = runLibScript('install-apps.mjs', ['--roles', rolesToInstall.join(',')], target);
     if ((result.status ?? EXIT_SYSTEM) !== 0) {
       console.error(`⚠️  Install step failed. Continuing...\n`);
     }
   }
 
-  console.log('\n━━━ Phase 5: Configure repo ━━━\n');
+  log('\n━━━ Phase 5: Configure repo ━━━\n');
   const updateCharters = spawnSync(process.execPath, [configure, '--update-charters'], {
     cwd: target,
     stdio: 'inherit',
@@ -530,7 +538,7 @@ async function cmdSetup(args) {
   if (updateInstructions.error) failSystem(updateInstructions.error.message);
   if ((updateInstructions.status ?? EXIT_SYSTEM) !== 0) process.exit(updateInstructions.status ?? EXIT_SYSTEM);
 
-  console.log('\n━━━ Phase 6: Health check ━━━\n');
+  log('\n━━━ Phase 6: Health check ━━━\n');
   const doctorResult = spawnSync(process.execPath, [configure, '--doctor'], {
     cwd: target,
     stdio: 'inherit',
@@ -538,7 +546,8 @@ async function cmdSetup(args) {
   if (doctorResult.error) failSystem(doctorResult.error.message);
   if ((doctorResult.status ?? EXIT_SYSTEM) !== 0) process.exit(doctorResult.status ?? EXIT_SYSTEM);
 
-  console.log('\n✅ Setup complete.');
+  log('\n✅ Setup complete.');
+  return { setup: true, target, roles: neededRoles };
 }
 
 function cmdResolveToken(args) {
@@ -597,8 +606,8 @@ function cmdRotateKey(args) {
     process.exit(result.status ?? 0);
   } else {
     // Open the settings page for the user to generate a new key
-    console.log(`🔑 Key rotation for role: ${role}\n`);
-    console.log('Step 1: Opening GitHub App settings page...\n');
+    log(`🔑 Key rotation for role: ${role}\n`);
+    log('Step 1: Opening GitHub App settings page...\n');
 
     const target = gitRootFromCwd() ?? process.cwd();
     const appFile = join(target, '.squad', 'identity', 'apps', `${role}.json`);
@@ -617,7 +626,7 @@ function cmdRotateKey(args) {
     if (!appSlug) failUser(`App registration at ${appFile} is missing "appSlug".`);
 
     const settingsUrl = `https://github.com/settings/apps/${appSlug}`;
-    console.log(`  ${settingsUrl}\n`);
+    log(`  ${settingsUrl}\n`);
 
     // Try to open in browser
     try {
@@ -625,11 +634,11 @@ function cmdRotateKey(args) {
       spawnSync(openCmd, [settingsUrl], { stdio: 'ignore' });
     } catch { /* best effort */ }
 
-    console.log('Step 2: In the browser, click "Generate a private key" and download the PEM.\n');
-    console.log('Step 3: Import the new key:\n');
-    console.log(`  squad-identity rotate-key --role ${role} --pem ~/Downloads/${appSlug}*.pem\n`);
-    console.log('Step 4: Delete the old key from the GitHub App settings page.');
-    console.log('Step 5: Delete the downloaded PEM file from your machine.\n');
+    log('Step 2: In the browser, click "Generate a private key" and download the PEM.\n');
+    log('Step 3: Import the new key:\n');
+    log(`  squad-identity rotate-key --role ${role} --pem ~/Downloads/${appSlug}*.pem\n`);
+    log('Step 4: Delete the old key from the GitHub App settings page.');
+    log('Step 5: Delete the downloaded PEM file from your machine.\n');
   }
 }
 
@@ -699,7 +708,7 @@ async function cmdImportApp(args) {
         const answer = await new Promise(res => rl.question('Overwrite? [y/N] ', res));
         rl.close();
         if (answer.trim().toLowerCase() !== 'y') {
-          console.log('Aborted.');
+          log('Aborted.');
           process.exit(0);
         }
       } else {
@@ -711,7 +720,7 @@ async function cmdImportApp(args) {
   // Save app registration JSON
   const appData = { appId: numericAppId, slug: appSlug, ...(clientId && { clientId }) };
   writeFileSync(appPath, JSON.stringify(appData, null, 2) + '\n', 'utf8');
-  console.log(`✅ App registration saved: ${appPath}`);
+  log(`✅ App registration saved: ${appPath}`);
 
   // Import PEM into keychain
   const createApp = join(PACKAGE_ROOT, 'extensions', 'squad-identity', 'lib', 'create-app.mjs');
@@ -725,25 +734,34 @@ async function cmdImportApp(args) {
     process.exit(result.status ?? 1);
   }
 
-  console.log(`\n✅ Existing app "${appSlug}" (ID: ${numericAppId}) registered for role "${role}".`);
-  console.log('   PEM stored in OS keychain. You can delete the local PEM file.');
-  console.log('\n   Next: run `squad-identity setup` to install the app and update charters.');
+  log(`\n✅ Existing app "${appSlug}" (ID: ${numericAppId}) registered for role "${role}".`);
+  log('   PEM stored in OS keychain. You can delete the local PEM file.');
+  log('\n   Next: run `squad-identity setup` to install the app and update charters.');
 }
 
-const [command = 'help', ...args] = process.argv.slice(2);
+// Strip --json from args before passing to commands
+const rawArgs = process.argv.slice(2).filter(a => a !== '--json');
+const [command = 'help', ...args] = rawArgs;
+
+/** Emit JSON to stdout when --json flag is active. */
+function emitJson(result) {
+  if (JSON_FLAG && result != null) {
+    process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+  }
+}
 
 if (command === '--version' || command === '-v') {
   console.log(VERSION);
 } else if (command === '--help' || command === '-h' || command === 'help') {
   printMainHelp();
 } else if (command === 'init') {
-  cmdInit(args);
+  emitJson(cmdInit(args));
 } else if (command === 'setup') {
-  await cmdSetup(args);
+  emitJson(await cmdSetup(args));
 } else if (command === 'resolve-token') {
   cmdResolveToken(args);
 } else if (command === 'upgrade') {
-  cmdUpgrade(args);
+  emitJson(cmdUpgrade(args));
 } else if (command === 'rotate-key') {
   cmdRotateKey(args);
 } else if (command === 'import-app') {
