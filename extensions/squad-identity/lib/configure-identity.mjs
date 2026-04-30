@@ -239,6 +239,28 @@ function loadRegistrationFiles() {
 }
 
 function getConfiguredRoles(cfg, registrations) {
+  // Only show roles that the team actually uses (from agentNameMap values)
+  // PLUS any role that is installed in this repo (has installationId)
+  const teamRoles = new Set(Object.values(cfg?.agentNameMap ?? {}));
+
+  // If agentNameMap exists and has entries, filter to relevant roles
+  if (teamRoles.size > 0) {
+    const roles = new Set();
+    for (const role of teamRoles) {
+      if (registrations.has(role) || cfg?.apps?.[role]) {
+        roles.add(role);
+      }
+    }
+    // Also include any role with an installationId (actively installed in this repo)
+    for (const [role, reg] of registrations) {
+      if (reg.data?.installationId) {
+        roles.add(role);
+      }
+    }
+    return [...roles].sort();
+  }
+
+  // Fallback: no agentNameMap — show all registered roles
   const roles = new Set();
   for (const role of Object.keys(cfg?.apps ?? {})) {
     if (!role.startsWith('_')) roles.add(role);
