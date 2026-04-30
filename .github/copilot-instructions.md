@@ -22,8 +22,8 @@ Each layer is upgrade-proof and independent. Agents use `squad_identity_*` tools
 
 | File | Purpose |
 |------|---------|
-| `bin/squad-identity.mjs` | CLI dispatcher; entry point for `squad-identity init/setup/create-apps/install-apps/resolve-token/create-app/find-app/import-app/upgrade/rotate-key/doctor/status` |
-| `extensions/squad-identity/extension.mjs` | Registers 12 tools; tools call lib scripts directly |
+| `bin/squad-identity.mjs` | CLI dispatcher; entry point for `squad-identity init/setup/create-app/import-app/upgrade/rotate-key/doctor/resolve-token` |
+| `extensions/squad-identity/extension.mjs` | Registers 7 tools; tools call lib scripts directly |
 | `extensions/squad-identity/lib/*.mjs` | 6 lib scripts: configure-identity, create-app, install-apps, resolve-token, keychain, sync-secrets |
 | `squad-identity/SKILL.md` | Agent protocol; read by agents at spawn time (Steps A–D, anti-patterns) |
 | `identity/config.json.template` | Template copied to `.squad/identity/config.json` on init |
@@ -69,14 +69,6 @@ Manual validation:
 ### Full setup (new repo)
 
 ```bash
-squad-identity create-apps    # Batch-create GitHub Apps for discovered roles
-squad-identity install-apps   # Batch-install apps into the repo
-squad-identity doctor         # Verify setup
-```
-
-Or use the guided alternative:
-
-```bash
 squad-identity setup    # Guided: walks through all steps interactively
 ```
 
@@ -93,14 +85,12 @@ TOKEN=$(squad_identity_resolve_token roleSlug="backend")
 
 ### Adding a new GitHub App identity
 
-1. Run `squad_identity_setup_steps` (shows setup instructions)
-2. Run `squad_identity_doctor` (verifies config and PEM keys are readable)
-3. Run `squad_identity_update_charters` (infers role slugs from team.md, writes ROLE_SLUG to charters)
+1. Run `squad_identity_doctor` (verifies config and PEM keys are readable)
+2. Run `squad_identity_configure` (infers role slugs from team.md, writes ROLE_SLUG to charters and updates copilot-instructions)
 
 ### Checking identity configuration
 
 ```bash
-squad_identity_status        # Show agentNameMap + registered apps
 squad_identity_doctor        # Health check (config presence, PEM readability, token resolution)
 ```
 
@@ -109,8 +99,7 @@ squad_identity_doctor        # Health check (config presence, PEM readability, t
 ```bash
 npm install -g @sabbour/squad-identity@latest
 squad-identity upgrade
-squad_identity_update_charters          # if roles changed
-squad_identity_update_copilot_instructions   # if instructions were lost
+squad_identity_configure          # if roles changed or instructions were lost
 ```
 
 ## Credential Storage

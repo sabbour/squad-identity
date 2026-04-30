@@ -38,6 +38,18 @@ Implemented the package as a zero-dependency Node ESM CLI with `bin/squad-identi
 
 ## Learnings
 
+### 2026-04-29T20:04:47-07:00 — granular doctor per-role health
+
+Upgraded `extensions/squad-identity/lib/configure-identity.mjs --doctor` to verify every registered role individually instead of probing only the lead role. Doctor now cross-checks `config.json` roles against `.squad/identity/apps/*.json`, validates keychain presence and installation IDs per role, and runs token resolution per role with actionable remediation commands when anything is missing.
+
+### 2026-04-29T20:04:47-07:00 — detailed install verification output
+
+Expanded the post-install verification in `extensions/squad-identity/lib/install-apps.mjs` to print step-by-step ✅/❌ checks for registration presence, private key availability, installation ID discovery, and token resolution. The verification now reuses shared discovery logic and can surface whether the failure is missing registration, missing key material, missing installation, or a GitHub token exchange error.
+
+### 2026-04-29T20:04:47-07:00 — resolve-token project root from cwd
+
+Fixed `extensions/squad-identity/lib/resolve-token.mjs` so CLI execution walks up from `process.cwd()` to the nearest `.squad` directory instead of overriding the caller's repo with a script-relative path. This unblocks `install-apps` health checks and direct `squad-identity resolve-token --role <role>` calls when the package is installed globally and the real project lives elsewhere.
+
 ### 2026-04-29T20:04:47-07:00 — install-apps project root from cwd
 
 Fixed `extensions/squad-identity/lib/install-apps.mjs` so `getProjectRoot()` walks up from `process.cwd()` to the nearest `.squad` directory instead of deriving a repo path from the installed script location. This makes `squad-identity install-apps` work from user repositories when the lib is executed out of the global npm package, matching the project-root discovery pattern already used by `create-app.mjs`.
@@ -58,6 +70,9 @@ Added two extension-only tools in `extensions/squad-identity/extension.mjs` that
 
 Fixed `keychainAvailable()` in `extensions/squad-identity/lib/keychain.mjs` to stop using `secret-tool --version`, which always exits non-zero on Linux. The availability probe now uses `secret-tool lookup` against a guaranteed-miss key and treats exit 1 with no stderr as healthy, so libsecret/D-Bus environments are recognized correctly.
 
+### 2026-04-30T10:30:00Z — idempotent phased setup flow
+
+Reworked `bin/squad-identity.mjs` so `squad-identity setup` now runs as a six-phase guided flow: initialize, discover, app creation/import, install, configure, and health check. It classifies each discovered role as `fully_configured`, `needs_creation`, `needs_pem`, or `needs_install`, skips already-complete work by default, supports `--force`/`--reconfigure` to re-prompt every role, and only runs repo installation for roles still missing `installationId`; the README now documents `setup` as the primary idempotent workflow.
 
 ### 2026-04-29T13:44:24-07:00 — changesets + CI/CD release pipeline
 

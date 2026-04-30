@@ -14,12 +14,9 @@ App bot identity — never the human operator's ambient `gh` session.
 
 | Tool | Purpose |
 |------|---------|
-| `squad_identity_status` | Show agentNameMap + registered apps |
+| `squad_identity_setup` | Show current status and guide to full CLI setup |
 | `squad_identity_doctor` | Health check (config, keys, token resolution) |
-| `squad_identity_update_charters` | Infer mapping from `team.md`, update charters + `config.json` |
-| `squad_identity_update_copilot_instructions` | Replace/append identity block in `.github/copilot-instructions.md` |
-| `squad_identity_setup_steps` | Get initial setup instructions (browser-interactive steps) |
-| `squad_identity_setup_all` | Guided full setup flow (browser, app creation, installation, charter injection) |
+| `squad_identity_configure` | Update charters with ROLE_SLUG and refresh copilot-instructions.md |
 
 **Agent Runtime Tools:**
 
@@ -28,14 +25,7 @@ App bot identity — never the human operator's ambient `gh` session.
 | `squad_identity_resolve_token` | Resolve bot GitHub App token for current agent |
 | `squad_identity_rotate_key` | Rotate a GitHub App private key (guided flow) |
 
-**Batch Operation Tools (v1.2.0+):**
-
-| Tool | Purpose |
-|------|---------|
-| `squad_identity_generate_create_script` | Generate bash script for batch GitHub App creation (agent review) |
-| `squad_identity_generate_install_script` | Generate bash script for batch GitHub App installation (agent review) |
-
-**Governance Tools (v1.1.0+):**
+**Governance Tools:**
 
 | Tool | Purpose |
 |------|---------|
@@ -53,8 +43,8 @@ ROLE_SLUG="<slug>"  # injected by configure-identity --update-charters; do not e
 ```
 
 **If this line is absent from your charter:**
-1. Call `squad_identity_status` — it prints the full `agentNameMap` from `config.json`
-2. If `config.json` is missing: call `squad_identity_update_charters` to infer and populate it
+1. Call `squad_identity_doctor` — it shows the full identity status including `agentNameMap`
+2. If `config.json` is missing: call `squad_identity_configure` to infer and populate it
 
 The mapping is stored in `.squad/identity/config.json` under `agentNameMap`.
 It is inferred from `.squad/team.md` (the `| Name | Role |` table) during setup.
@@ -207,8 +197,8 @@ The upgrade overwrites `.github/copilot-instructions.md` and `.github/agents/squ
 Your identity setup in `.squad/identity/` and `.github/extensions/` is **never touched**.
 
 To restore the identity references:
-1. Run `squad_identity_update_copilot_instructions` tool (or `--update-copilot-instructions`)
-2. Optionally run `squad_identity_update_charters` if charters were regenerated
+1. Run `squad_identity_configure` tool (or `squad-identity setup` from CLI)
+2. This updates both charters and copilot-instructions in one step
 
 Everything else (config.json, extension, skill) survives automatically.
 

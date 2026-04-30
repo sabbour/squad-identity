@@ -18,20 +18,15 @@ describe('Extension: tool registration', () => {
   const toolNameMatches = [...extensionSource.matchAll(/name:\s*'(squad_identity_\w+)'/g)];
   const registeredTools = toolNameMatches.map(m => m[1]);
 
-  it('registers exactly 12 tools', () => {
-    assert.equal(registeredTools.length, 12,
-      `Expected 12 tools, found: ${registeredTools.join(', ')}`);
+  it('registers exactly 7 tools', () => {
+    assert.equal(registeredTools.length, 7,
+      `Expected 7 tools, found: ${registeredTools.join(', ')}`);
   });
 
   const expectedTools = [
-    'squad_identity_status',
     'squad_identity_doctor',
-    'squad_identity_update_charters',
-    'squad_identity_update_copilot_instructions',
-    'squad_identity_setup_steps',
-    'squad_identity_setup_all',
-    'squad_identity_generate_create_script',
-    'squad_identity_generate_install_script',
+    'squad_identity_configure',
+    'squad_identity_setup',
     'squad_identity_resolve_token',
     'squad_identity_rotate_key',
     'squad_identity_lease_token',
@@ -72,11 +67,10 @@ describe('Extension: tool descriptions', () => {
 
 describe('Extension: tool handlers', () => {
   it('admin tools call configure-identity.mjs', () => {
-    // status, doctor, update_charters, update_copilot_instructions all use runConfigure
-    assert.ok(extensionSource.includes("runConfigure(session, '--status')"), 'status should call --status');
+    // doctor and configure both use runConfigure
     assert.ok(extensionSource.includes("runConfigure(session, '--doctor')"), 'doctor should call --doctor');
-    assert.ok(extensionSource.includes("runConfigure(session, '--update-charters')"), 'update_charters should call --update-charters');
-    assert.ok(extensionSource.includes("runConfigure(session, '--update-copilot-instructions')"), 'update_copilot_instructions should call --update-copilot-instructions');
+    assert.ok(extensionSource.includes("runConfigure(session, '--update-charters')"), 'configure should call --update-charters');
+    assert.ok(extensionSource.includes("runConfigure(session, '--update-copilot-instructions')"), 'configure should call --update-copilot-instructions');
   });
 
   it('resolve_token tool calls resolve-token.mjs', () => {

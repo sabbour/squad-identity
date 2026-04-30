@@ -37,13 +37,11 @@ describe('CLI: version and help', () => {
     assert.ok(stdout.includes('Usage:'));
     assert.ok(stdout.includes('init'));
     assert.ok(stdout.includes('setup'));
-    assert.ok(stdout.includes('create-apps'));
-    assert.ok(stdout.includes('install-apps'));
     assert.ok(stdout.includes('resolve-token'));
     assert.ok(stdout.includes('upgrade'));
     assert.ok(stdout.includes('doctor'));
-    assert.ok(stdout.includes('status'));
     assert.ok(stdout.includes('rotate-key'));
+    assert.ok(stdout.includes('import-app'));
   });
 
   it('help command works same as --help', () => {
@@ -89,7 +87,7 @@ describe('CLI: negative paths', () => {
   });
 
   it('command --help prints command-specific help', () => {
-    for (const cmd of ['init', 'upgrade', 'rotate-key', 'doctor', 'status', 'setup', 'create-apps', 'install-apps', 'resolve-token']) {
+    for (const cmd of ['init', 'upgrade', 'rotate-key', 'doctor', 'setup', 'resolve-token', 'import-app']) {
       const { status, stdout } = runCli([cmd, '--help']);
       assert.equal(status, 0, `${cmd} --help should exit 0`);
       assert.ok(stdout.includes('Usage:'), `${cmd} --help should contain Usage:`);
@@ -229,10 +227,10 @@ describe('CLI: upgrade', () => {
 });
 
 // ---------------------------------------------------------------------------
-// doctor and status (in an inited but unconfigured repo)
+// doctor (in an inited but unconfigured repo)
 // ---------------------------------------------------------------------------
 
-describe('CLI: doctor and status', () => {
+describe('CLI: doctor', () => {
   let dir;
 
   before(() => {
@@ -242,13 +240,6 @@ describe('CLI: doctor and status', () => {
 
   after(() => {
     cleanupFixture(dir);
-  });
-
-  it('status runs without crashing', () => {
-    const { status, stdout, stderr } = runCli(['status'], { cwd: dir });
-    // status may exit non-zero if no apps are configured, but should not crash
-    const output = stdout + stderr;
-    assert.ok(output.length > 0, 'status should produce output');
   });
 
   it('doctor runs without crashing', () => {

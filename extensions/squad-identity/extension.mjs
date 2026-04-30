@@ -284,20 +284,6 @@ function buildInstallScript(apps) {
 joinSession(async session => {
 
   // -------------------------------------------------------------------------
-  // Tool: squad_identity_status
-  // -------------------------------------------------------------------------
-
-  session.registerTool({
-    name: 'squad_identity_status',
-    description: 'Show the current Squad identity configuration: agentNameMap (agent name → role slug) and registered GitHub App registrations.',
-    inputSchema: { type: 'object', properties: {}, required: [] },
-    handler: async () => {
-      const out = await runConfigure(session, '--status');
-      return { type: 'text', text: out || 'No output.' };
-    },
-  });
-
-  // -------------------------------------------------------------------------
   // Tool: squad_identity_doctor
   // -------------------------------------------------------------------------
 
@@ -312,112 +298,36 @@ joinSession(async session => {
   });
 
   // -------------------------------------------------------------------------
-  // Tool: squad_identity_update_charters
+  // Tool: squad_identity_configure
   // -------------------------------------------------------------------------
 
   session.registerTool({
-    name: 'squad_identity_update_charters',
-    description: 'Parse .squad/team.md to infer the agent-name → role-slug mapping, write it to .squad/identity/config.json as agentNameMap, and inject a concrete ROLE_SLUG="<slug>" line into each agent charter. Also adds a skill pointer to .squad/skills/squad-identity/SKILL.md. Idempotent.',
+    name: 'squad_identity_configure',
+    description: 'Update agent charters with ROLE_SLUG and refresh the identity block in copilot-instructions.md. Runs both update-charters and update-copilot-instructions. Idempotent.',
     inputSchema: { type: 'object', properties: {}, required: [] },
     handler: async () => {
-      const out = await runConfigure(session, '--update-charters');
-      return { type: 'text', text: out || 'No output.' };
+      const charterResult = await runConfigure(session, '--update-charters');
+      const instructionsResult = await runConfigure(session, '--update-copilot-instructions');
+      return {
+        type: 'text',
+        text: `Charters:\n${charterResult}\n\nCopilot Instructions:\n${instructionsResult}`,
+      };
     },
   });
 
   // -------------------------------------------------------------------------
-  // Tool: squad_identity_update_copilot_instructions
+  // Tool: squad_identity_setup (GUIDED SETUP)
   // -------------------------------------------------------------------------
 
   session.registerTool({
-    name: 'squad_identity_update_copilot_instructions',
-    description: 'Replace or append the Squad identity block in .github/copilot-instructions.md. The block explains how agents should resolve ROLE_SLUG and obtain a bot token. Safe to run after every squad upgrade.',
-    inputSchema: { type: 'object', properties: {}, required: [] },
-    handler: async () => {
-      const out = await runConfigure(session, '--update-copilot-instructions');
-      return { type: 'text', text: out || 'No output.' };
-    },
-  });
-
-  // -------------------------------------------------------------------------
-  // Tool: squad_identity_setup_steps
-  // -------------------------------------------------------------------------
-
-  session.registerTool({
-    name: 'squad_identity_setup_steps',
-    description: 'Return step-by-step instructions for setting up GitHub App bot identity from scratch. Some steps (GitHub App creation, OAuth) require a browser and are run manually.',
-    inputSchema: { type: 'object', properties: {}, required: [] },
-    handler: async () => {
-      const text = `
-# Squad Identity — Setup Steps
-
-These steps configure GitHub App bot identity so each Squad agent writes to
-GitHub as its own \`{app-slug}[bot]\` account instead of the human operator.
-
-## Quick Setup (recommended)
-
-Run in terminal:
-\`\`\`bash
-squad-identity setup
-\`\`\`
-
-This reads .squad/team.md, shows discovered roles, and creates+installs a GitHub App for each one.
-
-## Manual Setup (step by step)
-
-### Prerequisites
-- \`gh\` CLI authenticated (\`gh auth status\`)
-- \`node\` >= 18
-
-### Step 1 — Create GitHub Apps (browser required)
-
-Use the \`squad_identity_rotate_key\` tool or run the CLI:
-\`\`\`bash
-squad-identity setup
-\`\`\`
-
-### Step 2 — Verify
-
-Call \`squad_identity_doctor\` or:
-\`\`\`bash
-squad-identity doctor
-\`\`\`
-
-### Step 3 — Update charters (if needed)
-
-Call \`squad_identity_update_charters\` to inject ROLE_SLUG into each agent charter.
-
-### Step 4 — Update copilot-instructions.md
-
-Call \`squad_identity_update_copilot_instructions\` to restore the identity block.
-
-## Key files
-
-| File | Purpose |
-|------|---------|
-| \`.squad/identity/config.json\` | App registrations + agentNameMap |
-| OS Keychain (service: squad-identity) | PEM private keys (keyed by app ID) |
-| \`.squad/identity/apps/{role}.json\` | Per-role app registration |
-| \`.squad/skills/squad-identity/SKILL.md\` | Protocol agents read at spawn |
-`.trim();
-
-      return { type: 'text', text };
-    },
-  });
-
-  // -------------------------------------------------------------------------
-  // Tool: squad_identity_setup_all (GUIDED SETUP)
-  // -------------------------------------------------------------------------
-
-  session.registerTool({
-    name: 'squad_identity_setup_all',
-    description: 'Run the guided setup flow: reads .squad/team.md, discovers needed roles, creates GitHub Apps for each role (opens browser), installs them, captures installation IDs, and updates charters. Requires user interaction (browser).',
+    name: 'squad_identity_setup',
+    description: 'Run the full guided setup: init, discover roles, create/import apps, install, configure, and health check. Requires user interaction (browser).',
     inputSchema: { type: 'object', properties: {}, required: [] },
     handler: async () => {
       try {
         // Show current status first
         const out = await runConfigure(session, '--status');
-        
+
         const instructions = [
           '🚀 To run full guided setup, use the CLI in your terminal:',
           '',
@@ -434,116 +344,10 @@ Call \`squad_identity_update_copilot_instructions\` to restore the identity bloc
           'Current status:',
           out?.trim() || '(no configuration found — run setup first)',
         ].join('\n');
-        
+
         return { type: 'text', text: instructions };
       } catch (err) {
         return { type: 'text', text: `❌ Setup check failed: ${err.message}\n\nRun \`squad-identity setup\` in your terminal to start the guided flow.` };
-      }
-    },
-  });
-
-  // -------------------------------------------------------------------------
-  // Tool: squad_identity_generate_create_script
-  // -------------------------------------------------------------------------
-
-  session.registerTool({
-    name: 'squad_identity_generate_create_script',
-    description: 'Generate a bash script that creates missing GitHub Apps for roles discovered in .squad/team.md. Returns script text only; does not execute it.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        roles: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Optional list of role slugs to generate create-app commands for.',
-        },
-      },
-      required: [],
-    },
-    handler: async (input = {}) => {
-      try {
-        const discoveredRoles = discoverTeamRoleSlugs(REPO_ROOT);
-        if (!discoveredRoles.length) {
-          throw new Error('Could not discover any team roles from .squad/team.md.');
-        }
-
-        const requestedRoles = normalizeRequestedRoles(input.roles);
-        if (Array.isArray(input.roles) && input.roles.length && !requestedRoles?.length) {
-          throw new Error('No valid role filters were provided.');
-        }
-
-        const unknownRoles = (requestedRoles ?? []).filter(role => !discoveredRoles.includes(role));
-        if (unknownRoles.length) {
-          throw new Error(`Requested roles were not found in .squad/team.md: ${unknownRoles.join(', ')}`);
-        }
-
-        const registrations = loadAppRegistrations(REPO_ROOT);
-        const selectedRoles = requestedRoles ?? discoveredRoles;
-        const missingRoles = selectedRoles.filter(role => !registrations.has(role));
-        const text = buildCreateScript(missingRoles);
-        return { type: 'text', text };
-      } catch (err) {
-        const msg = err.message || 'unknown error';
-        return { type: 'text', text: `❌ Create script generation failed: ${msg}` };
-      }
-    },
-  });
-
-  // -------------------------------------------------------------------------
-  // Tool: squad_identity_generate_install_script
-  // -------------------------------------------------------------------------
-
-  session.registerTool({
-    name: 'squad_identity_generate_install_script',
-    description: 'Generate a bash script that installs registered GitHub Apps missing installation IDs in the current repository. Returns script text only; does not execute it.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        roles: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Optional list of role slugs to generate install commands for.',
-        },
-      },
-      required: [],
-    },
-    handler: async (input = {}) => {
-      try {
-        const registrations = loadAppRegistrations(REPO_ROOT);
-        if (!registrations.size) {
-          throw new Error('No app registrations were found in .squad/identity/apps/.');
-        }
-
-        const requestedRoles = normalizeRequestedRoles(input.roles);
-        if (Array.isArray(input.roles) && input.roles.length && !requestedRoles?.length) {
-          throw new Error('No valid role filters were provided.');
-        }
-
-        const selectedRoles = requestedRoles ?? [...registrations.keys()].sort();
-        const unknownRoles = selectedRoles.filter(role => !registrations.has(role));
-        if (unknownRoles.length) {
-          throw new Error(`Requested roles are not registered in .squad/identity/apps/: ${unknownRoles.join(', ')}`);
-        }
-
-        const appsToInstall = selectedRoles.map(role => {
-          const registration = registrations.get(role) ?? {};
-          const slug = registration.slug ?? registration.appSlug ?? null;
-          if (!slug) {
-            throw new Error(`No slug found for role "${role}" in .squad/identity/apps/${role}.json.`);
-          }
-
-          return {
-            role,
-            slug,
-            installationId: registration.installationId ?? null,
-          };
-        }).filter(app => !app.installationId);
-
-        const text = buildInstallScript(appsToInstall);
-        return { type: 'text', text };
-      } catch (err) {
-        const msg = err.message || 'unknown error';
-        return { type: 'text', text: `❌ Install script generation failed: ${msg}` };
       }
     },
   });

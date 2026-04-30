@@ -2,7 +2,7 @@
 
 import { existsSync, mkdirSync, copyFileSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
 
@@ -33,18 +33,13 @@ Usage:
   squad-identity <command> [target-repo]
 
 Commands:
-  init [target-repo]        Install squad-identity into a Squad repo
-  setup [target-repo]       Guided interactive setup (create + install + configure)
-  create-apps [--roles ..]   Create GitHub Apps for all discovered roles (batch)
-  install-apps [--roles ..]  Install registered apps into the repo (batch)
-  resolve-token --role <r>   Resolve a bot installation token for a role
-  create-app --role <r>      Create a single GitHub App (manifest flow)
-  find-app --name <n>       Find an existing GitHub App
+  setup [target-repo]       Full guided setup (recommended)
+  doctor                    Run health checks
+  resolve-token --role <r>  Resolve a bot installation token
+  rotate-key --role <r>     Rotate a private key
   import-app --role <r>     Register an existing GitHub App
   upgrade [target-repo]     Refresh installed files
-  rotate-key --role <r>     Rotate a private key
-  doctor                    Run health checks
-  status                    Show configuration status
+  init [target-repo]        Install files only (advanced)
   help                      Show this help
 
 Options:
@@ -55,17 +50,13 @@ Options:
 function printCommandHelp(command) {
   const help = {
     init: `Usage: squad-identity init [target-repo]\n\nInstalls the Copilot CLI extension, Squad skill, identity config template, and rotation runbook. If target-repo is omitted, the current git repository root is used.`,
-    setup: `Usage: squad-identity setup [target-repo]\n\nGuided setup that reads .squad/team.md, shows discovered roles, and creates or imports a GitHub App for each one. Runs init first if not already done.\n\nFlow:\n  1. Reads team.md to discover roles\n  2. Shows roles and asks for confirmation\n  3. For each role: [C]reate new / [i]mport existing / [s]kip\n  4. Installs all apps into the repo\n  5. Captures installation IDs\n  6. Updates charters with ROLE_SLUG`,
-    'create-apps': `Usage: squad-identity create-apps [--roles role1,role2]\n\nBatch-create GitHub Apps for all roles discovered in .squad/team.md that do not yet have registrations.\nRuns create-app.mjs sequentially with --icon for each missing role, then runs doctor.\n\nOptional:\n  --roles <list>   Comma-separated role filter (e.g. lead,backend,tester)`,
-    'install-apps': `Usage: squad-identity install-apps [--roles role1,role2]\n\nBatch-install registered GitHub Apps that are missing installationId in .squad/identity/apps/.\nRuns install-apps.mjs for the selected pending roles, then updates charters.\n\nOptional:\n  --roles <list>   Comma-separated role filter (e.g. lead,backend,tester)`,
+    setup: `Usage: squad-identity setup [target-repo] [--force]\n\nThe primary entry point for squad-identity setup. Runs the full guided flow idempotently and skips already-configured steps unless --force is passed.\n\nPhases:\n  1. Init — install extension, skill, config (if missing)\n  2. Discover — read .squad/team.md for agent roles\n  3. Apps — create or import GitHub Apps per role\n  4. Install — install apps into the repo\n  5. Configure — update charters + copilot-instructions\n  6. Health — run doctor to verify\n\nOptions:\n  --force    Re-prompt for all roles and reapply setup steps, even if already configured`,
     'resolve-token': `Usage: squad-identity resolve-token --role <role>\n\nResolve a bot GitHub installation token for the given role. Prints the token to stdout so it can be captured in shell scripts.\n\nRequired:\n  --role <role>   Role slug (e.g. backend, frontend, lead)`,
     upgrade: `Usage: squad-identity upgrade [target-repo]\n\nRefreshes extension and skill files, then reapplies the squad-identity block in .github/copilot-instructions.md. Existing identity config and PEM keys are never touched.`,
     'rotate-key': `Usage: squad-identity rotate-key --role <role> [--pem <path>]\n\nRotate a GitHub App private key for a role.\n\nWithout --pem:\n  Opens the GitHub App settings page so you can generate a new key.\n  After downloading, run again with --pem to import.\n\nWith --pem:\n  Imports the PEM file into the OS keychain, replacing any existing key.`,
     'create-app': `Usage: squad-identity create-app --role <role> [--owner <username>] [--prefix <prefix>] [--name <name>]\n\nCreate a new GitHub App for a role using the GitHub manifest flow.\nOpens a browser to complete the OAuth authorization.\n\nRequired:\n  --role <role>       Role slug (e.g., lead, backend, frontend, tester)\n\nOptional:\n  --owner <username>  GitHub username or org for the app (default: authenticated user)\n  --prefix <prefix>   App name prefix (default: sqd)\n  --name <name>       Override the generated app name entirely\n\nThe manifest flow creates the app, generates a PEM key, and stores it\nin the OS keychain. The app registration is saved to .squad/identity/apps/<role>.json.`,
-    'import-app': `Usage: squad-identity import-app --role <role> --app-id <id> --app-slug <slug> --pem <path> [--force]\n\nRegister an existing GitHub App for a role. Use this when you already have a\nGitHub App created (manually or from another repo) instead of creating a new one.\n\nRequired:\n  --role <role>       Role slug (e.g., lead, backend, frontend, tester)\n  --app-id <id>      GitHub App ID (numeric)\n  --app-slug <slug>  GitHub App slug (e.g., my-squad-backend)\n  --pem <path>       Path to the PEM private key file\n\nOptional:\n  --client-id <id>   OAuth client ID (if known)\n  --force            Overwrite existing role registration without prompting\n\nThe PEM is stored in the OS keychain and the local file is NOT kept.\nThe app registration is saved to .squad/identity/apps/<role>.json.`,
-    'find-app': `Usage: squad-identity find-app --name <name> [--org <org>] [--role <role>] [--pem <path>] [--force]\n\nSearch for an existing GitHub App by name or slug across user and org installations, then register it for a Squad role.\n\nRequired:\n  --name <name>     App name or slug to search for\n\nOptional:\n  --org <org>       Search this organization's installations too\n  --role <role>     Role slug to register under (prompts if omitted)\n  --pem <path>      Path to PEM private key file (skip to provide later)\n  --force           Overwrite existing role registration without prompting\n\nSearch order:\n  1. Public app lookup by slug (GET /apps/{slug})\n  2. User installations (GET /user/installations)\n  3. Org installations (GET /orgs/{org}/installations) if --org given\n\nAfter finding the app, opens the GitHub install page in the browser and\nauto-detects the installation ID (polls for 2 min, falls back to manual).\nThe PEM key is optional — you can provide it later via import-app or setup.`,
+    'import-app': `Usage: squad-identity import-app --role <role> (--app-id <id> --app-slug <slug> --pem <path> | --search <name>) [--force]\n\nRegister an existing GitHub App for a role. Use this when you already have a\nGitHub App created (manually or from another repo) instead of creating a new one.\n\nRequired:\n  --role <role>       Role slug (e.g., lead, backend, frontend, tester)\n\nDirect import mode:\n  --app-id <id>       GitHub App ID (numeric)\n  --app-slug <slug>   GitHub App slug (e.g., my-squad-backend)\n  --pem <path>        Path to the PEM private key file\n\nSearch mode:\n  --search <name>     Find an existing GitHub App by name or slug, then continue with import\n\nOptional:\n  --client-id <id>    OAuth client ID (if known)\n  --org <org>         Search this organization's installations too when using --search\n  --force             Overwrite existing role registration without prompting\n\nThe PEM is stored in the OS keychain and the local file is NOT kept.\nThe app registration is saved to .squad/identity/apps/<role>.json.`,
     doctor: `Usage: squad-identity doctor\n\nRuns the existing configure-identity.mjs --doctor health check in the current Squad repo.`,
-    status: `Usage: squad-identity status\n\nRuns the existing configure-identity.mjs --status check in the current Squad repo.`,
   };
   console.log(help[command] ?? 'Unknown command.');
 }
@@ -255,6 +246,111 @@ Next steps:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 }
 
+async function loadKeychainModule() {
+  const keychainPath = join(PACKAGE_ROOT, 'extensions', 'squad-identity', 'lib', 'keychain.mjs');
+  try {
+    return await import(pathToFileURL(keychainPath).href);
+  } catch {
+    return null;
+  }
+}
+
+async function hasPemForRole(role, appId, keychainModule) {
+  const envKey = role.toUpperCase();
+  if (process.env[`SQUAD_${envKey}_PRIVATE_KEY`]) {
+    return true;
+  }
+
+  if (!keychainModule?.keychainLoad || !appId) {
+    return false;
+  }
+
+  try {
+    return !!keychainModule.keychainLoad(String(appId));
+  } catch {
+    return false;
+  }
+}
+
+async function checkRoleStatus(target, role, registration, keychainModule) {
+  if (!registration || !registration.appId) return 'needs_creation';
+
+  const hasPem = await hasPemForRole(role, registration.appId, keychainModule);
+  if (!hasPem) return 'needs_pem';
+  if (!registration.installationId) return 'needs_install';
+  return 'fully_configured';
+}
+
+function formatRoleStatus(status) {
+  if (status === 'fully_configured') return '✅ app + PEM + installed';
+  if (status === 'needs_pem') return '⚠️  app exists, no PEM';
+  if (status === 'needs_install') return '⚠️  app exists, not installed';
+  return '🆕 needs app creation';
+}
+
+async function importExistingAppForRole(target, role, ask) {
+  const appIdStr = await ask(`    App ID (numeric): `);
+  const slug = await ask(`    App slug: `);
+  const pem = await ask(`    PEM file path: `);
+
+  const numericAppId = parseInt(appIdStr.trim(), 10);
+  if (isNaN(numericAppId)) {
+    console.error(`    ⚠️  Invalid app ID "${appIdStr.trim()}". Skipping ${role}.\n`);
+    return;
+  }
+
+  const resolvedPem = resolve(pem.trim().replace(/^~/, process.env.HOME ?? ''));
+  if (!existsSync(resolvedPem)) {
+    console.error(`    ⚠️  PEM file not found: ${resolvedPem}. Skipping ${role}.\n`);
+    return;
+  }
+
+  const pemContent = readFileSync(resolvedPem, 'utf8');
+  if (!pemContent.includes('-----BEGIN RSA PRIVATE KEY-----') && !pemContent.includes('-----BEGIN PRIVATE KEY-----')) {
+    console.error(`    ⚠️  File does not appear to be a PEM key. Skipping ${role}.\n`);
+    return;
+  }
+
+  const appsDir = join(target, '.squad', 'identity', 'apps');
+  mkdirSync(appsDir, { recursive: true });
+  const appPath = join(appsDir, `${role}.json`);
+  writeFileSync(appPath, JSON.stringify({ appId: numericAppId, slug: slug.trim() }, null, 2) + '\n', 'utf8');
+
+  const createApp = join(PACKAGE_ROOT, 'extensions', 'squad-identity', 'lib', 'create-app.mjs');
+  const importResult = spawnSync(process.execPath, [createApp, '--import-key', resolvedPem, '--role', role], {
+    cwd: target,
+    stdio: 'inherit',
+  });
+  if (importResult.status !== 0) {
+    console.error(`    ⚠️  PEM import failed for ${role}. Registration saved — run rotate-key later.\n`);
+  } else {
+    console.log(`    ✅ Imported existing app for ${role}\n`);
+  }
+}
+
+function createAppForRole(target, role) {
+  const createApp = join(PACKAGE_ROOT, 'extensions', 'squad-identity', 'lib', 'create-app.mjs');
+  console.log(`\n━━━ Creating app for role: ${role} ━━━\n`);
+  const result = spawnSync(process.execPath, [createApp, '--role', role, '--icon'], {
+    cwd: target,
+    stdio: 'inherit',
+  });
+  if (result.status !== 0) {
+    console.error(`\n⚠️  Failed to create app for role "${role}". Continuing...`);
+  }
+}
+
+function rotateKeyForRole(role, target) {
+  const selfPath = fileURLToPath(import.meta.url);
+  const result = spawnSync(process.execPath, [selfPath, 'rotate-key', '--role', role], {
+    cwd: target,
+    stdio: 'inherit',
+  });
+  if (result.status !== 0) {
+    console.error(`\n⚠️  Failed to start key rotation for role "${role}". Continuing...`);
+  }
+}
+
 function cmdInit(args) {
   if (args.includes('--help') || args.includes('-h')) return printCommandHelp('init');
   const target = resolveTarget(args);
@@ -282,219 +378,139 @@ function cmdUpgrade(args) {
 
 async function cmdSetup(args) {
   if (args.includes('--help') || args.includes('-h')) return printCommandHelp('setup');
+
+  const force = args.includes('--force') || args.includes('--reconfigure');
   const target = resolveTarget(args);
-
-  // Ensure init has been run
-  const extDir = join(target, '.github', 'extensions', 'squad-identity');
-  if (!existsSync(extDir)) {
-    console.log('🔧 Running init first...\n');
-    syncInstallFiles(target, { includeIdentityConfig: true });
-    console.log('');
-  }
-
   const configure = join(PACKAGE_ROOT, 'extensions', 'squad-identity', 'lib', 'configure-identity.mjs');
-  const registrations = loadAppRegistrations(target);
-  const existingApps = new Set(registrations.keys());
-  const neededRoles = discoverNeededRoles(target);
 
-  // Show discovered roles
-  console.log(`\n🔍 Discovered ${neededRoles.length} roles from .squad/team.md:\n`);
-  for (const role of neededRoles) {
-    const status = existingApps.has(role) ? '✅ already created' : '🆕 needs creation';
-    console.log(`   ${role.padEnd(12)} ${status}`);
+  console.log('\n━━━ Phase 1: Initialize ━━━\n');
+  const extDir = join(target, '.github', 'extensions', 'squad-identity');
+  const skillPath = join(target, '.squad', 'skills', 'squad-identity', 'SKILL.md');
+  const configPath = join(target, '.squad', 'identity', 'config.json');
+  const needsInit = force || !existsSync(extDir) || !existsSync(skillPath) || !existsSync(configPath);
+
+  if (needsInit) {
+    if (force) {
+      console.log('🔧 --force enabled; reapplying install files.\n');
+    } else {
+      console.log('🔧 Installing missing setup files.\n');
+    }
+    syncInstallFiles(target, { includeIdentityConfig: true });
+  } else {
+    console.log('✅ Extension, skill, and identity config already present — skipping init.');
   }
 
-  const rolesToCreate = neededRoles.filter(r => !existingApps.has(r));
+  console.log('\n━━━ Phase 2: Discover roles ━━━\n');
+  const neededRoles = discoverNeededRoles(target);
+  const keychainModule = await loadKeychainModule();
+  let registrations = loadAppRegistrations(target);
+  const roleStatuses = new Map();
 
-  if (rolesToCreate.length === 0) {
-    console.log('\n✅ All roles already have app registrations. Running install check...\n');
+  console.log(`🔍 Discovered ${neededRoles.length} roles from .squad/team.md:\n`);
+  for (const role of neededRoles) {
+    const status = await checkRoleStatus(target, role, registrations.get(role), keychainModule);
+    roleStatuses.set(role, status);
+    console.log(`   ${role.padEnd(12)} ${formatRoleStatus(status)}`);
+  }
+
+  console.log('\n━━━ Phase 3: Create or register apps ━━━\n');
+  const rolesToPrompt = force
+    ? neededRoles
+    : neededRoles.filter(role => ['needs_creation', 'needs_pem'].includes(roleStatuses.get(role)));
+
+  if (rolesToPrompt.length === 0) {
+    console.log('✅ All roles already have an app registration and PEM — skipping app prompts.');
   } else {
-    console.log(`\n📋 Roles needing apps: ${rolesToCreate.join(', ')}`);
-    console.log('\nFor each role you can either:');
-    console.log('  [c] Create a new GitHub App (opens browser for manifest flow)');
-    console.log('  [i] Import an existing GitHub App (provide app ID, slug, and PEM)');
-    console.log('  [s] Skip this role for now\n');
-
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     const ask = (q) => new Promise(res => rl.question(q, res));
 
-    const createApp = join(PACKAGE_ROOT, 'extensions', 'squad-identity', 'lib', 'create-app.mjs');
+    try {
+      for (const role of rolesToPrompt) {
+        const currentStatus = roleStatuses.get(role);
 
-    for (const role of rolesToCreate) {
-      const choice = await ask(`  ${role}: [C]reate / [i]mport / [s]kip? `);
-      const c = choice.trim().toLowerCase();
+        if (currentStatus === 'needs_pem') {
+          console.log(`  ${role}: app exists but PEM is missing.`);
+          const choice = await ask('    [R]otate key / [i]mport existing / [s]kip? ');
+          const selected = choice.trim().toLowerCase();
 
-      if (c === 's') {
-        console.log(`    ⏭️  Skipped ${role}\n`);
-        continue;
-      }
-
-      if (c === 'i') {
-        // Import existing app
-        const appIdStr = await ask(`    App ID (numeric): `);
-        const slug = await ask(`    App slug: `);
-        const pem = await ask(`    PEM file path: `);
-
-        const numericAppId = parseInt(appIdStr.trim(), 10);
-        if (isNaN(numericAppId)) {
-          console.error(`    ⚠️  Invalid app ID "${appIdStr.trim()}". Skipping ${role}.\n`);
-          continue;
-        }
-
-        const resolvedPem = resolve(pem.trim().replace(/^~/, process.env.HOME ?? ''));
-        if (!existsSync(resolvedPem)) {
-          console.error(`    ⚠️  PEM file not found: ${resolvedPem}. Skipping ${role}.\n`);
-          continue;
-        }
-
-        const pemContent = readFileSync(resolvedPem, 'utf8');
-        if (!pemContent.includes('-----BEGIN RSA PRIVATE KEY-----') && !pemContent.includes('-----BEGIN PRIVATE KEY-----')) {
-          console.error(`    ⚠️  File does not appear to be a PEM key. Skipping ${role}.\n`);
-          continue;
-        }
-
-        // Save registration
-        const appsDir2 = join(target, '.squad', 'identity', 'apps');
-        mkdirSync(appsDir2, { recursive: true });
-        const appPath = join(appsDir2, `${role}.json`);
-        writeFileSync(appPath, JSON.stringify({ appId: numericAppId, slug: slug.trim() }, null, 2) + '\n', 'utf8');
-
-        // Import PEM
-        const importResult = spawnSync(process.execPath, [createApp, '--import-key', resolvedPem, '--role', role], {
-          cwd: target,
-          stdio: 'inherit',
-        });
-        if (importResult.status !== 0) {
-          console.error(`    ⚠️  PEM import failed for ${role}. Registration saved — run rotate-key later.\n`);
+          if (selected === 'r') {
+            rotateKeyForRole(role, target);
+          } else if (selected === 'i') {
+            await importExistingAppForRole(target, role, ask);
+          } else {
+            console.log(`    ⏭️  Skipped ${role}\n`);
+          }
         } else {
-          console.log(`    ✅ Imported existing app for ${role}\n`);
+          if (currentStatus === 'fully_configured') {
+            console.log(`  ${role}: already fully configured.`);
+          } else if (currentStatus === 'needs_install') {
+            console.log(`  ${role}: app + PEM already present; install still needed.`);
+          }
+
+          const choice = await ask(`  ${role}: [C]reate / [i]mport / [s]kip? `);
+          const selected = choice.trim().toLowerCase();
+
+          if (selected === 'i') {
+            await importExistingAppForRole(target, role, ask);
+          } else if (selected === 's') {
+            console.log(`    ⏭️  Skipped ${role}\n`);
+          } else {
+            createAppForRole(target, role);
+          }
         }
-        continue;
+
+        registrations = loadAppRegistrations(target);
+        roleStatuses.set(role, await checkRoleStatus(target, role, registrations.get(role), keychainModule));
       }
-
-      // Default: create new app
-      console.log(`\n━━━ Creating app for role: ${role} ━━━\n`);
-      const result = spawnSync(process.execPath, [createApp, '--role', role, '--icon'], {
-        cwd: target,
-        stdio: 'inherit',
-      });
-      if (result.status !== 0) {
-        console.error(`\n⚠️  Failed to create app for role "${role}". Continuing with remaining roles...`);
-      }
-    }
-
-    rl.close();
-  }
-
-  // Install all apps
-  console.log('\n━━━ Installing apps into repository ━━━\n');
-  const installApps = join(PACKAGE_ROOT, 'extensions', 'squad-identity', 'lib', 'install-apps.mjs');
-  const installResult = spawnSync(process.execPath, [installApps], {
-    cwd: target,
-    stdio: 'inherit',
-  });
-
-  // Update charters
-  console.log('\n━━━ Updating charters ━━━\n');
-  spawnSync(process.execPath, [configure, '--update-charters'], {
-    cwd: target,
-    stdio: 'inherit',
-  });
-
-  spawnSync(process.execPath, [configure, '--update-copilot-instructions'], {
-    cwd: target,
-    stdio: 'inherit',
-  });
-
-  console.log('\n✅ Setup complete! Run `squad-identity doctor` to verify.');
-}
-
-function cmdCreateApps(args) {
-  if (args.includes('--help') || args.includes('-h')) return printCommandHelp('create-apps');
-
-  const target = gitRootFromCwd() ?? process.cwd();
-  const requestedRoles = parseRolesOption(args);
-  const neededRoles = discoverNeededRoles(target);
-  const registrations = loadAppRegistrations(target);
-  const selectedRoles = requestedRoles ? neededRoles.filter(role => requestedRoles.includes(role)) : neededRoles;
-
-  if (requestedRoles && selectedRoles.length === 0) {
-    console.log('✅ Nothing to create. No requested roles are missing app registrations.');
-    process.exit(0);
-  }
-
-  const rolesToCreate = selectedRoles.filter(role => !registrations.has(role));
-  if (rolesToCreate.length === 0) {
-    console.log('✅ Nothing to create. All selected roles already have app registrations.');
-    process.exit(0);
-  }
-
-  console.log(`🔧 Creating GitHub Apps for roles: ${rolesToCreate.join(', ')}\n`);
-
-  let failed = false;
-  for (const role of rolesToCreate) {
-    console.log(`━━━ Creating app for role: ${role} ━━━\n`);
-    const result = runLibScript('create-app.mjs', ['--role', role, '--icon'], target);
-    if (result.status !== 0) {
-      failed = true;
-      console.error(`\n⚠️  Failed to create app for role "${role}". Continuing with remaining roles...`);
+    } finally {
+      rl.close();
     }
   }
 
-  console.log('\n━━━ Running doctor ━━━\n');
-  const doctorResult = runLibScript('configure-identity.mjs', ['--doctor'], target);
-  process.exit(failed ? (doctorResult.status || EXIT_USER) : (doctorResult.status ?? 0));
-}
-
-function cmdInstallApps(args) {
-  if (args.includes('--help') || args.includes('-h')) return printCommandHelp('install-apps');
-
-  const target = gitRootFromCwd() ?? process.cwd();
-  const requestedRoles = parseRolesOption(args);
-  const registrations = loadAppRegistrations(target);
-
-  if (registrations.size === 0) {
-    console.log('✅ Nothing to install. No app registrations found in .squad/identity/apps/.');
-    process.exit(0);
+  console.log('\n━━━ Phase 4: Install apps ━━━\n');
+  registrations = loadAppRegistrations(target);
+  for (const role of neededRoles) {
+    roleStatuses.set(role, await checkRoleStatus(target, role, registrations.get(role), keychainModule));
   }
 
-  const availableRoles = [...registrations.keys()].sort();
-  const selectedRoles = requestedRoles ? availableRoles.filter(role => requestedRoles.includes(role)) : availableRoles;
-  if (requestedRoles && selectedRoles.length === 0) {
-    console.log('✅ Nothing to install. No requested roles have registered apps.');
-    process.exit(0);
-  }
-
-  const rolesToInstall = selectedRoles.filter(role => {
-    const registration = registrations.get(role) ?? {};
-    return !registration.installationId;
-  });
-
+  const rolesToInstall = neededRoles.filter(role => roleStatuses.get(role) === 'needs_install');
   if (rolesToInstall.length === 0) {
-    console.log('✅ Nothing to install. All selected apps already have installation IDs.');
-    process.exit(0);
-  }
-
-  console.log(`🔧 Installing GitHub Apps for roles: ${rolesToInstall.join(', ')}\n`);
-
-  let installResult;
-  if (requestedRoles) {
+    console.log('✅ No app installs pending — skipping install phase.');
+  } else {
+    console.log(`📦 Roles needing installation: ${rolesToInstall.join(', ')}\n`);
     for (const role of rolesToInstall) {
-      installResult = runLibScript('install-apps.mjs', ['--role', role], target);
-      if (installResult.status !== 0) {
-        process.exit(installResult.status ?? EXIT_USER);
+      console.log(`━━━ Installing app for role: ${role} ━━━\n`);
+      const result = runLibScript('install-apps.mjs', ['--role', role], target);
+      if ((result.status ?? EXIT_SYSTEM) !== 0) {
+        console.error(`⚠️  Install step failed for ${role}. Continuing...\n`);
       }
     }
-  } else {
-    installResult = runLibScript('install-apps.mjs', [], target);
-    if (installResult.status !== 0) {
-      process.exit(installResult.status ?? EXIT_USER);
-    }
   }
 
-  console.log('\n━━━ Updating charters ━━━\n');
-  const chartersResult = runLibScript('configure-identity.mjs', ['--update-charters'], target);
-  process.exit(chartersResult.status ?? 0);
+  console.log('\n━━━ Phase 5: Configure repo ━━━\n');
+  const updateCharters = spawnSync(process.execPath, [configure, '--update-charters'], {
+    cwd: target,
+    stdio: 'inherit',
+  });
+  if (updateCharters.error) failSystem(updateCharters.error.message);
+  if ((updateCharters.status ?? EXIT_SYSTEM) !== 0) process.exit(updateCharters.status ?? EXIT_SYSTEM);
+
+  const updateInstructions = spawnSync(process.execPath, [configure, '--update-copilot-instructions'], {
+    cwd: target,
+    stdio: 'inherit',
+  });
+  if (updateInstructions.error) failSystem(updateInstructions.error.message);
+  if ((updateInstructions.status ?? EXIT_SYSTEM) !== 0) process.exit(updateInstructions.status ?? EXIT_SYSTEM);
+
+  console.log('\n━━━ Phase 6: Health check ━━━\n');
+  const doctorResult = spawnSync(process.execPath, [configure, '--doctor'], {
+    cwd: target,
+    stdio: 'inherit',
+  });
+  if (doctorResult.error) failSystem(doctorResult.error.message);
+  if ((doctorResult.status ?? EXIT_SYSTEM) !== 0) process.exit(doctorResult.status ?? EXIT_SYSTEM);
+
+  console.log('\n✅ Setup complete.');
 }
 
 function cmdResolveToken(args) {
@@ -592,7 +608,7 @@ function cmdRotateKey(args) {
 async function cmdImportApp(args) {
   if (args.includes('--help') || args.includes('-h')) return printCommandHelp('import-app');
 
-  let role = null, appId = null, appSlug = null, pemPath = null, clientId = null;
+  let role = null, appId = null, appSlug = null, pemPath = null, clientId = null, searchName = null, org = null;
   const force = args.includes('--force');
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--force') continue;
@@ -601,9 +617,26 @@ async function cmdImportApp(args) {
     else if (args[i] === '--app-slug' && args[i + 1]) appSlug = args[++i];
     else if (args[i] === '--pem' && args[i + 1]) pemPath = args[++i];
     else if (args[i] === '--client-id' && args[i + 1]) clientId = args[++i];
+    else if (args[i] === '--search' && args[i + 1]) searchName = args[++i];
+    else if (args[i] === '--org' && args[i + 1]) org = args[++i];
   }
 
   if (!role) failUser('--role is required. Example: squad-identity import-app --role backend --app-id 12345 --app-slug my-squad-backend --pem ~/key.pem');
+
+  if (searchName) {
+    const findApp = join(PACKAGE_ROOT, 'extensions', 'squad-identity', 'lib', 'find-app.mjs');
+    const findArgs = ['--name', searchName, '--role', role];
+    if (org) findArgs.push('--org', org);
+    if (pemPath) findArgs.push('--pem', pemPath);
+    if (force) findArgs.push('--force');
+    const result = spawnSync(process.execPath, [findApp, ...findArgs], {
+      cwd: process.cwd(),
+      stdio: 'inherit',
+    });
+    if (result.error) failSystem(result.error.message);
+    process.exit(result.status ?? 0);
+  }
+
   if (!appId) failUser('--app-id is required (numeric GitHub App ID).');
   if (!appSlug) failUser('--app-slug is required (GitHub App slug, e.g., my-squad-backend).');
   if (!pemPath) failUser('--pem is required (path to the PEM private key file).');
@@ -679,10 +712,6 @@ if (command === '--version' || command === '-v') {
   cmdInit(args);
 } else if (command === 'setup') {
   await cmdSetup(args);
-} else if (command === 'create-apps') {
-  cmdCreateApps(args);
-} else if (command === 'install-apps') {
-  cmdInstallApps(args);
 } else if (command === 'resolve-token') {
   cmdResolveToken(args);
 } else if (command === 'upgrade') {
@@ -691,17 +720,6 @@ if (command === '--version' || command === '-v') {
   cmdRotateKey(args);
 } else if (command === 'import-app') {
   await cmdImportApp(args);
-} else if (command === 'find-app') {
-  if (args.includes('--help') || args.includes('-h')) printCommandHelp('find-app');
-  else {
-    const findApp = join(PACKAGE_ROOT, 'extensions', 'squad-identity', 'lib', 'find-app.mjs');
-    const result = spawnSync(process.execPath, [findApp, ...args], {
-      cwd: process.cwd(),
-      stdio: 'inherit',
-    });
-    if (result.error) failSystem(result.error.message);
-    process.exit(result.status ?? 0);
-  }
 } else if (command === 'create-app') {
   if (args.includes('--help') || args.includes('-h')) printCommandHelp('create-app');
   else {
@@ -716,9 +734,6 @@ if (command === '--version' || command === '-v') {
 } else if (command === 'doctor') {
   if (args.includes('--help') || args.includes('-h')) printCommandHelp('doctor');
   else runConfigure('--doctor', process.cwd());
-} else if (command === 'status') {
-  if (args.includes('--help') || args.includes('-h')) printCommandHelp('status');
-  else runConfigure('--status', process.cwd());
 } else {
   printMainHelp();
   failUser(`unknown command: ${command}`);

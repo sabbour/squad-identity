@@ -60,56 +60,45 @@ Once you have agents with roles in `.squad/team.md`, proceed to Step 1.
 # Install squad-identity
 npm install -g @sabbour/squad-identity
 
-# Init the identity layer in your Squad repo (from within the repo directory)
-squad-identity init
-```
-
-After init completes you'll see:
-
-```
-✅ Extension installed → .github/extensions/squad-identity
-✅ Skill installed    → .squad/skills/squad-identity/SKILL.md
-✓  Identity config   → .squad/identity/config.json
-
-Next steps:
-  1. Restart Copilot CLI to load the extension
-  2. Create and install GitHub Apps for your agent roles
-```
-
-**Quick setup flow (recommended):**
-
-```bash
-# Batch-create GitHub Apps for all roles discovered in .squad/team.md
-squad-identity create-apps
-
-# Batch-install registered GitHub Apps into the repo
-squad-identity install-apps
-
-# Verify everything is wired up
-squad-identity doctor
-```
-
-**Or use guided interactive setup:**
-
-```bash
-# Guided setup — walks through all steps interactively
+# Recommended: run guided setup in your Squad repo (from within the repo directory)
 squad-identity setup
 ```
 
-The recommended flow (`create-apps` → `install-apps` → `doctor`) is faster for automated setups, while `setup` is better for first-time interactive exploration.
+`setup` runs the full flow end-to-end and is safe to re-run.
 
-`squad-identity setup` walks you through everything:
+If you only want to install the extension/skill/config without the guided app flow, use:
 
-1. Reads `.squad/team.md` to discover agent roles
-2. Shows discovered roles and their status
-3. For each role, offers choices:
-   - **Create custom app** (recommended): Create your own GitHub App named `{your-github-username}-<role>` (opens browser manifest flow)
-   - **Use public app**: Install the pre-made `sqd-<role>` public GitHub App (if available)
-   - **Import existing app**: Use an existing GitHub App (provide app ID, slug, installation ID)
-   - **Skip** the role for now
-4. Installs each app into the repository
-5. Captures installation IDs
-6. Injects `ROLE_SLUG` into each agent's charter
+```bash
+squad-identity init
+```
+
+**Guided setup (recommended):**
+
+```bash
+# Recommended first-time and day-2 flow
+squad-identity setup
+```
+
+`setup` is idempotent. It skips work that is already complete and only prompts for roles that still need attention.
+
+Setup phases:
+
+1. **Initialize** — install the extension, skill, and identity config if missing
+2. **Discover roles** — read `.squad/team.md` and classify each role as:
+   - `fully_configured`
+   - `needs_creation`
+   - `needs_pem`
+   - `needs_install`
+3. **Create/register apps** — prompt only for roles that still need app creation or PEM recovery
+4. **Install apps** — install only roles that are still missing a repo installation
+5. **Configure** — update agent charters and Copilot instructions
+6. **Health check** — run `doctor`
+
+Force a full re-prompt when you want to reconfigure every role:
+
+```bash
+squad-identity setup --force
+```
 
 #### Create a custom app
 
@@ -126,11 +115,11 @@ This opens the GitHub manifest flow in your browser and creates an app named `{y
 #### Already have GitHub Apps?
 
 If you already have GitHub Apps created (from a previous repo, manually, or from
-an org), use `find-app` to locate and register them:
+an org), use `import-app` to locate and register them:
 
 ```bash
 # Search for an existing app by name — no PEM needed upfront
-squad-identity find-app --name my-squad-backend --role backend
+squad-identity import-app --role backend --search my-squad-backend
 
 # What happens:
 #   1. Finds the app (public lookup → user installs → org installs)
@@ -139,7 +128,7 @@ squad-identity find-app --name my-squad-backend --role backend
 #   4. Optionally asks for PEM path (press Enter to skip)
 
 # If you have the PEM handy, pass it inline:
-squad-identity find-app --name my-squad-backend --role backend --pem ~/key.pem
+squad-identity import-app --role backend --search my-squad-backend --pem ~/key.pem
 
 # Or import directly if you know the app ID and slug
 squad-identity import-app \
@@ -149,9 +138,9 @@ squad-identity import-app \
   --pem ~/Downloads/my-squad-backend.pem
 ```
 
-`find-app` searches your user and org installations, opens the browser for
+`import-app --search` searches your user and org installations, opens the browser for
 repo-level installation, and auto-detects the installation ID. The PEM is
-**optional** — you can provide it later via `import-app` or during `setup`.
+**optional** — you can provide it later during `setup`.
 
 If a PEM is provided, it goes straight to the OS keychain (no file left on disk).
 Then run `squad-identity setup` — it will see the pre-registered apps and skip
@@ -218,17 +207,25 @@ squad-identity upgrade
 
 ### When to re-run setup
 
-If you added new roles to `.squad/team.md` after the initial setup:
+`setup` is safe to run repeatedly.
 
 ```bash
-squad-identity setup    # will detect new roles and offer create/import/skip
+squad-identity setup
+```
+
+Use it after adding roles to `.squad/team.md`, after importing missing PEM keys, or any time you want the tool to fill in unfinished setup steps.
+
+If you want to re-prompt every role even when it is already configured:
+
+```bash
+squad-identity setup --force
 ```
 
 Or to just re-inject charters without touching apps:
 
 ```bash
 squad-identity doctor   # verify health first
-# Then in a Copilot session: call squad_identity_update_charters
+# Then in a Copilot session: call squad_identity_configure
 ```
 
 ---
@@ -239,7 +236,7 @@ squad-identity doctor   # verify health first
 
 ```mermaid
 graph LR
-    A["Extension<br/>.github/extensions/squad-identity/"] -->|registers tools| B["12 CLI Tools<br/>squad_identity_*"]
+    A["Extension<br/>.github/extensions/squad-identity/"] -->|registers tools| B["7 CLI Tools<br/>squad_identity_*"]
     B -->|calls| C["Lib Scripts<br/>configure-identity, resolve-token,<br/>attest-write, keychain, etc."]
     D["Skill<br/>.squad/skills/squad-identity/SKILL.md"] -->|read by agents| E["Agent at Spawn<br/>follows Steps A-D"]
     F["Config<br/>.squad/identity/config.json"] -->|stores| G["Mappings<br/>agent name → role slug → app ID"]
@@ -251,7 +248,7 @@ graph LR
 
 **Three layers, all upgrade-proof:**
 
-1. **Extension** — registers 12 `squad_identity_*` tools in every Copilot CLI
+1. **Extension** — registers 7 `squad_identity_*` tools in every Copilot CLI
    session. Tools call `lib/*.mjs` directly.
 2. **Skill** — protocol reference injected into every agent's context at spawn.
    Defines Steps A-D (fail-closed setup → token resolution → inline usage
@@ -341,33 +338,26 @@ curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/{owner}/{rep
 
 | Command | Description |
 |---------|-------------|
-| `squad-identity init [repo]` | Install extension, skill, and config template into a Squad repo |
 | `squad-identity setup [repo]` | Guided interactive setup: discover roles, create/import apps, install, update charters |
-| `squad-identity create-apps [--roles role1,role2]` | Batch-create GitHub Apps for all discovered roles (optional filter) |
-| `squad-identity install-apps [--roles role1,role2]` | Batch-install registered apps into the repo (optional filter) |
-| `squad-identity resolve-token --role <r>` | Resolve a bot GitHub installation token for a role (CLI use, not agent) |
-| `squad-identity create-app --role <r>` | Create a new GitHub App for a single role (browser manifest flow) |
-| `squad-identity find-app --name <n>` | Find an existing GitHub App by name, install it, register for a role |
-| `squad-identity import-app --role <r>` | Register an existing GitHub App for a role (provide app ID, slug, PEM) |
+| `squad-identity init [repo]` | Install extension, skill, and config template into a Squad repo (advanced) |
 | `squad-identity upgrade [repo]` | Refresh extension files and copilot-instructions identity block |
+| `squad-identity create-app --role <r>` | Create a new GitHub App for a single role (browser manifest flow) |
+| `squad-identity import-app --role <r>` | Register an existing GitHub App for a role (direct or `--search` mode) |
+| `squad-identity resolve-token --role <r>` | Resolve a bot GitHub installation token for a role (CLI use, not agent) |
 | `squad-identity rotate-key --role <r>` | Rotate a GitHub App private key (two-step guided flow) |
 | `squad-identity doctor` | Health check: config, keychain, token resolution |
-| `squad-identity status` | Show identity configuration and registered apps |
 
 ## Copilot CLI tools
 
-After restarting Copilot CLI, these 12 tools are available in every session:
+After restarting Copilot CLI, these 7 tools are available in every session:
 
 **Admin tools:**
 
 | Tool | What it does |
 |------|-------------|
-| `squad_identity_setup_steps` | Print step-by-step setup instructions |
-| `squad_identity_setup_all` | Show current status and guide to full CLI setup |
-| `squad_identity_status` | Show agentNameMap and registered apps |
+| `squad_identity_setup` | Show current status and guide to full CLI setup |
 | `squad_identity_doctor` | Health check (config, keychain, token resolution) |
-| `squad_identity_update_charters` | Infer role slugs from `team.md`, inject `ROLE_SLUG` into charters |
-| `squad_identity_update_copilot_instructions` | Restore identity block in `copilot-instructions.md` |
+| `squad_identity_configure` | Update charters with ROLE_SLUG and refresh copilot-instructions.md |
 
 **Agent runtime tools:**
 
@@ -376,14 +366,7 @@ After restarting Copilot CLI, these 12 tools are available in every session:
 | `squad_identity_resolve_token` | Resolve bot token for the current agent's `ROLE_SLUG` |
 | `squad_identity_rotate_key` | Rotate a GitHub App private key (guided browser + keychain flow) |
 
-**Batch operation tools (v1.2.0+):**
-
-| Tool | What it does |
-|------|-------------|
-| `squad_identity_generate_create_script` | Generate bash script for batch GitHub App creation (agent review + approval) |
-| `squad_identity_generate_install_script` | Generate bash script for batch GitHub App installation (agent review + approval) |
-
-**Governance tools (v1.1.0+):**
+**Governance tools:**
 
 | Tool | What it does |
 |------|-------------|
@@ -557,8 +540,7 @@ squad-identity upgrade
 If roles or charters changed:
 
 ```bash
-squad_identity_update_charters
-squad_identity_update_copilot_instructions
+squad_identity_configure
 ```
 
 ---
@@ -635,9 +617,9 @@ process is using that port.
 
 ### "Token resolution failed"
 
-1. `squad_identity_status` — check that the role is registered
-2. `squad_identity_doctor` — check PEM is in keychain and token resolves
-3. Verify app is installed in the repo
+1. `squad-identity doctor` — check that the role is registered and PEM is in keychain
+2. Verify app is installed in the repo
+3. Run `squad-identity setup` to fix any gaps
 
 ### "Keychain not available"
 
