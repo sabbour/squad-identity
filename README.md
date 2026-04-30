@@ -94,23 +94,26 @@ squad-identity doctor
 
 1. Reads `.squad/team.md` to discover agent roles
 2. Shows discovered roles and their status
-3. For each role, offers three choices:
-   - **Create** a new GitHub App (opens your browser for the manifest flow)
-   - **Import** an existing GitHub App (provide app ID, slug, and PEM file)
+3. For each role, offers choices:
+   - **Use public app** (recommended): Install the pre-made `sqd-<role>` public GitHub App — no creation needed
+   - **Create custom app**: Create your own GitHub App named `{your-alias}-<role>` (opens browser manifest flow)
+   - **Import existing app**: Use an existing GitHub App (provide app ID, slug, installation ID)
    - **Skip** the role for now
 4. Installs each app into the repository
 5. Captures installation IDs
 6. Injects `ROLE_SLUG` into each agent's charter
 
-#### Create a single app
+#### Create a custom app
 
-To create a GitHub App for one role without running the full guided setup:
+To create a dedicated GitHub App with your own naming (e.g., `{your-alias}-backend`) without running the full guided setup:
 
 ```bash
 squad-identity create-app --role backend
 ```
 
-This opens the GitHub manifest flow in your browser. The PEM key is stored in the OS keychain automatically.
+This opens the GitHub manifest flow in your browser and creates an app named `{your-alias}-<role>`. The PEM key is stored in the OS keychain automatically.
+
+> **Note:** Most users should use the public `sqd-<role>` apps during setup. Use this command only if you want a separate, dedicated app for a role.
 
 #### Already have GitHub Apps?
 
@@ -148,7 +151,32 @@ creation for those roles.
 
 ---
 
-## Install channels
+## GitHub Apps: two-tier model
+
+`squad-identity` supports two ways to deploy bot apps:
+
+### Tier 1: Public apps (recommended)
+
+Pre-made, shared GitHub Apps with the `sqd-*` naming convention:
+- `sqd-lead[bot]`, `sqd-backend[bot]`, `sqd-frontend[bot]`, `sqd-tester[bot]`, etc.
+- Created and maintained by the Squad team
+- Just **install** them into your repo — no creation or key management needed
+- Shared across your team; anyone can use them
+- Default choice during `squad-identity setup`
+
+### Tier 2: Custom apps (optional)
+
+Create your own dedicated GitHub Apps with naming pattern `{your-alias}-<role>`:
+- Use when you want role-specific apps isolated to your team/org
+- Named like `myteam-backend[bot]`, `alice-frontend[bot]`, etc.
+- Created on-demand via `squad-identity create-app --role <role>`
+- You manage the PEM keys in your OS keychain
+
+**How to choose:**
+- **Starting out?** Use Tier 1 (`sqd-*` public apps) — simplest and fastest.
+- **Need isolation?** Use Tier 2 (custom apps) — fine-grained control per role.
+
+---
 
 | Channel | Install command | Stability |
 |---------|----------------|-----------|

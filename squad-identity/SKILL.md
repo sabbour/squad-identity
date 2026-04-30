@@ -52,6 +52,18 @@ ROLE_SLUG="<slug>"  # injected by configure-identity --update-charters; do not e
 The mapping is stored in `.squad/identity/config.json` under `agentNameMap`.
 It is inferred from `.squad/team.md` (the `| Name | Role |` table) during setup.
 
+### GitHub Apps: public vs. custom
+
+Your role slug corresponds to one of two types of GitHub Apps:
+
+**Public app (default):** `sqd-<role>[bot]`  
+Shared, pre-made apps (e.g., `sqd-backend[bot]`, `sqd-frontend[bot]`). Users just install them during setup — no creation or key management needed.
+
+**Custom app (optional):** `{alias}-<role>[bot]`  
+User-created, dedicated apps (e.g., `myteam-backend[bot]`, `alice-frontend[bot]`). Created via `squad-identity create-app --role <role>` if you want role-specific isolation.
+
+Token resolution works the same way for both: `squad_identity_resolve_token` looks up your role slug in `.squad/identity/config.json`, finds the app ID, and retrieves the PEM from the OS keychain.
+
 ---
 
 ## GIT IDENTITY Steps — Before Any GitHub Write
