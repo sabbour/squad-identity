@@ -1,5 +1,11 @@
 # @sabbour/squad-identity
 
+## 1.4.4
+
+### Patch Changes
+
+- f737979: Fix extension test expectations for declarative tools refactor (7→10 tools) and fix token-lease-store TTL cleanup removing entries before status checks could run.
+
 ## 1.4.3
 
 ### Patch Changes
