@@ -154,6 +154,22 @@ function loadAppRegistrations(target) {
   return registrations;
 }
 
+function deriveAppSlug(value) {
+  if (typeof value !== 'string') return null;
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return slug || null;
+}
+
+function resolveAppSlugFromRegistration(appData) {
+  if (!appData || typeof appData !== 'object') return null;
+  return appData.appSlug ?? appData.slug ?? deriveAppSlug(appData.appName) ?? null;
+}
+
 function discoverNeededRoles(target) {
   const teamMdPath = join(target, '.squad', 'team.md');
   if (!existsSync(teamMdPath)) {
@@ -618,12 +634,17 @@ function cmdRotateKey(args) {
     let appSlug;
     try {
       const appData = JSON.parse(readFileSync(appFile, 'utf8'));
-      appSlug = appData.appSlug;
+      appSlug = resolveAppSlugFromRegistration(appData);
+      if (appSlug && appData.appSlug !== appSlug) {
+        appData.appSlug = appSlug;
+        if (!appData.slug) appData.slug = appSlug;
+        writeFileSync(appFile, JSON.stringify(appData, null, 2) + '\n', 'utf8');
+      }
     } catch {
       failUser(`Failed to read app registration at ${appFile}.`);
     }
 
-    if (!appSlug) failUser(`App registration at ${appFile} is missing "appSlug".`);
+    if (!appSlug) failUser(`App registration at ${appFile} is missing an app slug. Re-run create-app/import-app or add "appSlug" manually.`);
 
     const settingsUrl = `https://github.com/settings/apps/${appSlug}`;
     log(`  ${settingsUrl}\n`);
@@ -718,7 +739,7 @@ async function cmdImportApp(args) {
   }
 
   // Save app registration JSON
-  const appData = { appId: numericAppId, slug: appSlug, ...(clientId && { clientId }) };
+  const appData = { appId: numericAppId, appSlug, slug: appSlug, ...(clientId && { clientId }) };
   writeFileSync(appPath, JSON.stringify(appData, null, 2) + '\n', 'utf8');
   log(`✅ App registration saved: ${appPath}`);
 

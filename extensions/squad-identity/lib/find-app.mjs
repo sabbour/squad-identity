@@ -340,6 +340,7 @@ If the app was created manually, use import-app instead:
   // Save app registration
   const appData = {
     appId: found.appId,
+    appSlug: found.appSlug,
     slug: found.appSlug,
     appName: found.appName,
     installationId: Number(installationId),

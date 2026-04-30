@@ -819,6 +819,7 @@ function saveCredentials(projectRoot, role, appData) {
     `${JSON.stringify(
       {
         appId: appData.id,
+        appSlug: appData.slug,
         slug: appData.slug,
         clientId: appData.client_id,
       },

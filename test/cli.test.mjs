@@ -250,6 +250,56 @@ describe('CLI: doctor', () => {
 });
 
 // ---------------------------------------------------------------------------
+// rotate-key and import-app compatibility
+// ---------------------------------------------------------------------------
+
+describe('CLI: registration compatibility', () => {
+  it('rotate-key falls back to legacy slug registrations and backfills appSlug', () => {
+    const dir = createFixtureRepo({ teamMd: true });
+    try {
+      const appsDir = join(dir, '.squad', 'identity', 'apps');
+      mkdirSync(appsDir, { recursive: true });
+      const appPath = join(appsDir, 'backend.json');
+      writeFileSync(appPath, JSON.stringify({ appId: 12345, slug: 'asabbour-backend' }, null, 2));
+
+      const { status, stderr } = runCli(['rotate-key', '--role', 'backend'], { cwd: dir });
+      assert.equal(status, 0);
+      assert.ok(stderr.includes('https://github.com/settings/apps/asabbour-backend'));
+
+      const saved = JSON.parse(readFileSync(appPath, 'utf-8'));
+      assert.equal(saved.appSlug, 'asabbour-backend');
+      assert.equal(saved.slug, 'asabbour-backend');
+    } finally {
+      cleanupFixture(dir);
+    }
+  });
+
+  it('import-app stores appSlug in the app registration file', () => {
+    const dir = createFixtureRepo({ teamMd: true });
+    try {
+      const pemPath = join(dir, 'backend.pem');
+      writeFileSync(pemPath, '-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBALegacytestkey==\n-----END RSA PRIVATE KEY-----\n');
+
+      runCli([
+        'import-app',
+        '--role', 'backend',
+        '--app-id', '12345',
+        '--app-slug', 'asabbour-backend',
+        '--pem', pemPath,
+      ], { cwd: dir });
+
+      const appPath = join(dir, '.squad', 'identity', 'apps', 'backend.json');
+      const saved = JSON.parse(readFileSync(appPath, 'utf-8'));
+      assert.equal(saved.appSlug, 'asabbour-backend');
+      assert.equal(saved.slug, 'asabbour-backend');
+      assert.equal(saved.appId, 12345);
+    } finally {
+      cleanupFixture(dir);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // setup preflight checks
 // ---------------------------------------------------------------------------
 
