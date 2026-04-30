@@ -1,5 +1,14 @@
 # @sabbour/squad-identity
 
+## 1.3.1
+
+### Patch Changes
+
+- d3d8166: Fix extension tool permissions and node binary resolution
+
+  - Add `skipPermission: true` to all tool definitions to prevent "Permission denied" errors in Copilot CLI
+  - Replace `process.execPath` with resolved `node` binary path — `process.execPath` returns the copilot binary in extension context, breaking all child process spawns
+
 ## 1.3.0
 
 ### Minor Changes
