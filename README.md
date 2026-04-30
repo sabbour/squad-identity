@@ -731,6 +731,18 @@ node --check bin/squad-identity.mjs   # syntax check
 
 ---
 
+## Related
+
+`squad-identity` is part of a family of Squad extensions:
+
+| Package | Purpose |
+|---------|---------|
+| **`@sabbour/squad-identity`** | GitHub App bot-identity governance — every agent write is attributed to a dedicated bot account *(this repo)* |
+| [`@sabbour/squad-reviews`](https://github.com/sabbour/squad-reviews) | Config-driven review governance — PR/issue routing, feedback threads, review gates |
+| [`@sabbour/squad-workflows`](https://github.com/sabbour/squad-workflows) | Issue-to-merge lifecycle — estimation, waves, design ceremonies, merge gates |
+
+---
+
 ## License
 
 MIT
