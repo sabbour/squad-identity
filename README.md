@@ -520,11 +520,44 @@ the downloaded `.pem` file from disk. Run `squad-identity doctor` to verify.
 
 `squad-identity setup` (or `configure-identity.mjs --update-charters`) reads the
 `| Name | Role |` table in `.squad/team.md`, matches each agent's role
-description against a keyword map, and derives the role slug from registered app
-names. The result is stored as `agentNameMap` in `.squad/identity/config.json`
-and a `ROLE_SLUG="<slug>"` line is injected into each charter.
+description against a keyword map, and derives the role slug. The result is stored
+as `agentNameMap` in `.squad/identity/config.json` and a `ROLE_SLUG="<slug>"`
+line is injected into each charter.
+
+### How roles are matched
+
+1. **Keyword matching** — the role description is checked against known keywords:
+
+   | Slug | Keywords |
+   |------|----------|
+   | `lead` | lead, architect, principal, staff, manager, director |
+   | `frontend` | frontend, front-end, ui, ux, react, vue, angular, css, design |
+   | `backend` | backend, back-end, api, server, node, core dev, developer, engineer |
+   | `tester` | test, qa, quality |
+   | `security` | security, auth, compliance, vulnerability |
+   | `devops` | devops, infra, platform, sre, ops, deploy, ci/cd, pipeline |
+   | `docs` | docs, documentation, technical writer, devrel |
+   | `data` | data, database, db, analytics |
+   | `reviewer` | reviewer, code review |
+
+2. **Slugify fallback** — if no keyword matches, the role description is
+   slugified automatically (e.g., "ML Engineer" → `ml-engineer`). This means
+   every role always gets a slug — setup never fails on unknown roles.
 
 No hardcoded name tables — works with any Squad character set.
+
+### App icons
+
+Each app gets a suggested avatar icon during creation:
+
+- **Known roles** (lead, backend, frontend, etc.) get a dedicated glyph and
+  brand color.
+- **Unknown/fallback roles** get a generic person silhouette with a
+  deterministic color derived from the slug name (same slug → same color every
+  time).
+
+The icon is shown on the completion page as a downloadable PNG. Upload it as
+your app's avatar in GitHub App settings.
 
 ---
 
