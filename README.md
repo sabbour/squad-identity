@@ -60,13 +60,33 @@ Once you have agents with roles in `.squad/team.md`, proceed to Step 1.
 # Install squad-identity
 npm install -g @sabbour/squad-identity
 
-# Init the identity layer in your Squad repo
+# Init the identity layer in your Squad repo (from within the repo directory)
 squad-identity init
+```
 
+After init completes you'll see:
+
+```
+✅ Extension installed → .github/extensions/squad-identity
+✅ Skill installed    → .squad/skills/squad-identity/SKILL.md
+✓  Identity config   → .squad/identity/config.json
+
+Next steps:
+  1. Restart Copilot CLI to load the extension
+  2. Call: squad_identity_setup_steps
+     (for first-time setup with no GitHub Apps yet)
+  3. Or if Apps already exist:
+     squad_identity_update_charters
+     squad_identity_doctor
+```
+
+Then run the guided setup:
+
+```bash
 # Guided setup — creates or imports GitHub Apps, installs them, updates charters
 squad-identity setup
 
-# Restart Copilot CLI, then verify
+# Verify everything is wired up
 squad-identity doctor
 ```
 
