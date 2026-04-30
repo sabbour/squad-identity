@@ -57,3 +57,17 @@ Configured a dual-channel release pipeline using changesets pre-release mode:
 - `README.md` — added "Install channels" table documenting stable vs insider install commands
 
 The insider branch uses changesets' built-in pre-release mode: when `pre.json` exists, `changeset version` appends `-insider.N` suffixes to versions. The `changesets/action` automatically publishes with the correct dist-tag because pre-release packages get their tag from the pre.json config.
+
+---
+
+## Team Updates
+
+### 2026-04-30T01:43:07Z — Scribe archived decision entries
+
+Scribe merged Tank's 2 inbox entries into the unified `.squad/decisions.md`:
+- `tank-sqd-prefix.md` — Default prefix changed from "squad" to "sqd"; custom apps derive prefix from owner alias
+- `tank-two-channel-release.md` — 2-channel release strategy (insider/stable) with changesets pre-release mode
+
+Created orchestration log: `.squad/orchestration-log/2026-04-30T01:43:07Z-Tank.md` summarizing this session's work (135/135 tests pass, 3 files modified, multi-OS/Node validation).
+
+Tank's work is now documented in the team decision ledger for future agent reference.

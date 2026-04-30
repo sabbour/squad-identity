@@ -69,4 +69,34 @@ Attestation is now Step E (post-write), not optional — protocol requires it fo
 
 **Key insight:** Both skills follow the "why before how" principle. Each section explains intent (when to use, what happens next) before showing git commands. The promotion skill emphasizes **process clarity over speed** — the 5-step approach prevents pre-release markers leaking to stable and ensures both branches remain clean for future work.
 
+Attestation is now Step E (post-write), not optional — protocol requires it for audit trail compliance.
+
+**For future docs:** When adding new governance features, update docs in this order: SKILL.md protocol (agent-facing), README architecture + tool table, runbook (admin/operator-facing). Anti-patterns table is now the place to flag new failure modes — update it when Trinity adds new post-flight rules.
+
+### 2026-04-29T13:56:08-07:00: Created two Copilot-level release process skills
+
+**Skills created:**
+1. `.copilot/skills/release-insider/SKILL.md` — "Release to Insider" (confidence: low, source: manual)
+2. `.copilot/skills/promote-to-stable/SKILL.md` — "Promote Insider to Stable" (confidence: low, source: manual)
+
+**Design rationale:**
+- **Skill 1 (Release to Insider):** Covers the operational flow for shipping features to the `@insider` npm tag. Emphasizes the role of changesets, the automatic "Version Packages (insider)" PR, and validation steps. Anti-patterns flag manual versioning, local publishing, and branching from main.
+- **Skill 2 (Promote to Stable):** Explains the 5-step promotion pipeline (exit pre-release → PR → merge → Version Packages PR → re-enter pre-release). Clarifies why `.changeset/pre.json` must not reach main and what happens if skipped. Anti-patterns include cherry-picking, forgetting pre-release re-entry, and bypassing the automated "Version Packages" PR.
+
+**Key insight:** Both skills follow the "why before how" principle. Each section explains intent (when to use, what happens next) before showing git commands. The promotion skill emphasizes **process clarity over speed** — the 5-step approach prevents pre-release markers leaking to stable and ensures both branches remain clean for future work.
+
 **Skills follow the template:** Both use the `.squad/templates/skill.md` format (frontmatter with metadata, Context, Patterns, Examples, Anti-Patterns). Examples show real workflows; anti-patterns are specific failure modes tied to the 2-channel release model.
+
+---
+
+## Team Updates
+
+### 2026-04-30T01:43:07Z — Scribe archived decision entries & generated release process skills documentation
+
+Scribe merged Oracle's 3 inbox entries into the unified `.squad/decisions.md`:
+- `oracle-v1.1.0-governance-docs.md` — v1.1.0 docs refresh (11 tools, Steps A-E, 3-layer architecture)
+- `oracle-release-skill-design.md` — Release process skills (release-insider, promote-to-stable) with low confidence, source: manual
+
+Created orchestration log: `.squad/orchestration-log/2026-04-30T01:43:07Z-Oracle.md` summarizing this session's documentation work (4 files modified, design decisions embedded, v1.1.0 consistency verified).
+
+Oracle's work is now part of the team decision ledger. Skills are ready for first agent use — confidence will upgrade to "medium" after successful first use and anti-pattern collection.
