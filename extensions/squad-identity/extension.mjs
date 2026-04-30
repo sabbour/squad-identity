@@ -10,6 +10,8 @@
 import { joinSession } from '@github/copilot-sdk/extension';
 import {
   existsSync,
+  readdirSync,
+  readFileSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -43,6 +45,236 @@ async function runConfigure(session, flag) {
     session.log(`configure-identity ${flag} error: ${msg}`);
     return msg;
   }
+}
+
+const ROLE_PATTERNS = [
+  { slug: 'security', keywords: ['security', 'auth', 'compliance'] },
+  { slug: 'frontend', keywords: ['frontend', 'ui', 'design'] },
+  { slug: 'backend', keywords: ['backend', 'api', 'server'] },
+  { slug: 'tester', keywords: ['test', 'qa', 'quality'] },
+  { slug: 'codereview', keywords: ['code review', 'reviewer', 'review'] },
+  { slug: 'scribe', keywords: ['scribe'] },
+  { slug: 'devops', keywords: ['devops', 'infra', 'platform'] },
+  { slug: 'docs', keywords: ['docs', 'devrel', 'writer'] },
+  { slug: 'data', keywords: ['data', 'database', 'analytics'] },
+  { slug: 'lead', keywords: ['lead', 'architect', 'tech lead'] },
+];
+
+function normalizeRoleKey(roleKey) {
+  if (typeof roleKey !== 'string') return null;
+  const normalized = roleKey
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return normalized || null;
+}
+
+function stripMarkdownCell(value) {
+  return value
+    .replace(/`/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseMarkdownRow(line) {
+  if (!line.trim().startsWith('|')) return [];
+  return line
+    .trim()
+    .slice(1, -1)
+    .split('|')
+    .map(cell => stripMarkdownCell(cell.trim()));
+}
+
+function parseTeamRoster(projectRoot) {
+  const teamPath = join(projectRoot, '.squad', 'team.md');
+
+  try {
+    const lines = readFileSync(teamPath, 'utf8').split(/\r?\n/);
+    const membersIndex = lines.findIndex(line => /^##\s+Members\b/i.test(line.trim()));
+    if (membersIndex === -1) return [];
+
+    let headerIndex = -1;
+    for (let index = membersIndex + 1; index < lines.length - 1; index += 1) {
+      if (
+        lines[index].trim().startsWith('|') &&
+        /^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(lines[index + 1])
+      ) {
+        headerIndex = index;
+        break;
+      }
+      if (index > membersIndex + 1 && /^##\s+/.test(lines[index].trim())) {
+        break;
+      }
+    }
+
+    if (headerIndex === -1) return [];
+
+    const headers = parseMarkdownRow(lines[headerIndex]).map(header => normalizeRoleKey(header));
+    const nameIndex = headers.indexOf('name');
+    const roleIndex = headers.indexOf('role');
+    if (nameIndex === -1 || roleIndex === -1) return [];
+
+    const roster = [];
+    for (let index = headerIndex + 2; index < lines.length; index += 1) {
+      const line = lines[index].trim();
+      if (!line) continue;
+      if (!line.startsWith('|')) break;
+
+      const cells = parseMarkdownRow(lines[index]);
+      const name = cells[nameIndex];
+      const role = cells[roleIndex];
+      if (name && role) {
+        roster.push({ name, role });
+      }
+    }
+
+    return roster;
+  } catch {
+    return [];
+  }
+}
+
+function matchRolePattern(role) {
+  const roleText = typeof role === 'string' ? role.toLowerCase() : '';
+  let bestMatch = null;
+
+  for (const [priority, pattern] of ROLE_PATTERNS.entries()) {
+    const hits = pattern.keywords.filter(keyword => roleText.includes(keyword)).length;
+    if (!hits) continue;
+
+    if (
+      !bestMatch ||
+      hits > bestMatch.hits ||
+      (hits === bestMatch.hits && priority < bestMatch.priority)
+    ) {
+      bestMatch = { slug: pattern.slug, hits, priority };
+    }
+  }
+
+  return bestMatch?.slug ?? null;
+}
+
+function discoverTeamRoleSlugs(projectRoot) {
+  const roles = [];
+  const seen = new Set();
+
+  for (const member of parseTeamRoster(projectRoot)) {
+    const role = matchRolePattern(member.role) ?? normalizeRoleKey(member.role);
+    if (!role || seen.has(role)) continue;
+    seen.add(role);
+    roles.push(role);
+  }
+
+  return roles;
+}
+
+function loadAppRegistrations(projectRoot) {
+  const appsDir = join(projectRoot, '.squad', 'identity', 'apps');
+  const registrations = new Map();
+
+  if (!existsSync(appsDir)) return registrations;
+
+  for (const file of readdirSync(appsDir)) {
+    if (!file.endsWith('.json')) continue;
+    const role = file.replace(/\.json$/, '');
+    try {
+      const data = JSON.parse(readFileSync(join(appsDir, file), 'utf8'));
+      registrations.set(role, data);
+    } catch {
+      // Skip unreadable registrations.
+    }
+  }
+
+  return registrations;
+}
+
+function normalizeRequestedRoles(roles) {
+  if (!Array.isArray(roles) || roles.length === 0) return null;
+
+  const normalizedRoles = [];
+  const seen = new Set();
+
+  for (const role of roles) {
+    const normalizedRole = matchRolePattern(role) ?? normalizeRoleKey(role);
+    if (!normalizedRole || seen.has(normalizedRole)) continue;
+    seen.add(normalizedRole);
+    normalizedRoles.push(normalizedRole);
+  }
+
+  return normalizedRoles;
+}
+
+function buildCreateScript(roles) {
+  const roleList = roles.length ? roles.join(', ') : 'none';
+  const lines = [
+    '#!/usr/bin/env bash',
+    'set -euo pipefail',
+    '',
+    '# Squad Identity — create missing GitHub Apps for team roles.',
+    '# Review before running. This checks prerequisites, then creates apps sequentially.',
+    '# Each create-app command opens a browser and must finish before the next one starts.',
+    ...(roles.length
+      ? roles.map(role => `# - ${role}`)
+      : ['# No missing app registrations were found for the selected roles.']),
+    '',
+    'node --version >/dev/null',
+    'gh auth status >/dev/null',
+    '',
+    `echo "Roles queued for app creation: ${roleList}"`,
+  ];
+
+  if (roles.length) {
+    for (const role of roles) {
+      lines.push('', `echo "Creating GitHub App for role: ${role}"`, `squad-identity create-app --role ${role}`);
+    }
+  } else {
+    lines.push('', 'echo "No GitHub Apps need creation."');
+  }
+
+  lines.push('', 'echo "Running squad-identity doctor..."', 'squad-identity doctor', '');
+  return lines.join('\n');
+}
+
+function buildInstallScript(apps) {
+  const appList = apps.length
+    ? apps.map(app => `${app.role} (${app.slug})`).join(', ')
+    : 'none';
+  const lines = [
+    '#!/usr/bin/env bash',
+    'set -euo pipefail',
+    '',
+    '# Squad Identity — install registered GitHub Apps into the current repository.',
+    '# Review before running. This opens each install page, waits for manual confirmation,',
+    '# then runs squad-identity setup so installation IDs can be captured.',
+    ...(apps.length
+      ? apps.map(app => `# - ${app.role} -> ${app.slug}`)
+      : ['# No registered apps are missing installation IDs for the selected roles.']),
+    '',
+    'gh auth status >/dev/null',
+    '',
+    `echo "Apps queued for installation: ${appList}"`,
+  ];
+
+  if (apps.length) {
+    for (const app of apps) {
+      lines.push(
+        '',
+        `echo "Opening install page for ${app.role} (${app.slug})"`,
+        `gh browse "https://github.com/apps/${app.slug}/installations/new"`,
+        `read -r -p "After completing the browser install for ${app.slug}, press Enter to continue..." _`
+      );
+    }
+
+    lines.push('', 'echo "Running squad-identity setup to capture installation IDs..."', 'squad-identity setup');
+  } else {
+    lines.push('', 'echo "No GitHub App installs are pending."');
+  }
+
+  lines.push('');
+  return lines.join('\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -206,6 +438,112 @@ Call \`squad_identity_update_copilot_instructions\` to restore the identity bloc
         return { type: 'text', text: instructions };
       } catch (err) {
         return { type: 'text', text: `❌ Setup check failed: ${err.message}\n\nRun \`squad-identity setup\` in your terminal to start the guided flow.` };
+      }
+    },
+  });
+
+  // -------------------------------------------------------------------------
+  // Tool: squad_identity_generate_create_script
+  // -------------------------------------------------------------------------
+
+  session.registerTool({
+    name: 'squad_identity_generate_create_script',
+    description: 'Generate a bash script that creates missing GitHub Apps for roles discovered in .squad/team.md. Returns script text only; does not execute it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        roles: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional list of role slugs to generate create-app commands for.',
+        },
+      },
+      required: [],
+    },
+    handler: async (input = {}) => {
+      try {
+        const discoveredRoles = discoverTeamRoleSlugs(REPO_ROOT);
+        if (!discoveredRoles.length) {
+          throw new Error('Could not discover any team roles from .squad/team.md.');
+        }
+
+        const requestedRoles = normalizeRequestedRoles(input.roles);
+        if (Array.isArray(input.roles) && input.roles.length && !requestedRoles?.length) {
+          throw new Error('No valid role filters were provided.');
+        }
+
+        const unknownRoles = (requestedRoles ?? []).filter(role => !discoveredRoles.includes(role));
+        if (unknownRoles.length) {
+          throw new Error(`Requested roles were not found in .squad/team.md: ${unknownRoles.join(', ')}`);
+        }
+
+        const registrations = loadAppRegistrations(REPO_ROOT);
+        const selectedRoles = requestedRoles ?? discoveredRoles;
+        const missingRoles = selectedRoles.filter(role => !registrations.has(role));
+        const text = buildCreateScript(missingRoles);
+        return { type: 'text', text };
+      } catch (err) {
+        const msg = err.message || 'unknown error';
+        return { type: 'text', text: `❌ Create script generation failed: ${msg}` };
+      }
+    },
+  });
+
+  // -------------------------------------------------------------------------
+  // Tool: squad_identity_generate_install_script
+  // -------------------------------------------------------------------------
+
+  session.registerTool({
+    name: 'squad_identity_generate_install_script',
+    description: 'Generate a bash script that installs registered GitHub Apps missing installation IDs in the current repository. Returns script text only; does not execute it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        roles: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional list of role slugs to generate install commands for.',
+        },
+      },
+      required: [],
+    },
+    handler: async (input = {}) => {
+      try {
+        const registrations = loadAppRegistrations(REPO_ROOT);
+        if (!registrations.size) {
+          throw new Error('No app registrations were found in .squad/identity/apps/.');
+        }
+
+        const requestedRoles = normalizeRequestedRoles(input.roles);
+        if (Array.isArray(input.roles) && input.roles.length && !requestedRoles?.length) {
+          throw new Error('No valid role filters were provided.');
+        }
+
+        const selectedRoles = requestedRoles ?? [...registrations.keys()].sort();
+        const unknownRoles = selectedRoles.filter(role => !registrations.has(role));
+        if (unknownRoles.length) {
+          throw new Error(`Requested roles are not registered in .squad/identity/apps/: ${unknownRoles.join(', ')}`);
+        }
+
+        const appsToInstall = selectedRoles.map(role => {
+          const registration = registrations.get(role) ?? {};
+          const slug = registration.slug ?? registration.appSlug ?? null;
+          if (!slug) {
+            throw new Error(`No slug found for role "${role}" in .squad/identity/apps/${role}.json.`);
+          }
+
+          return {
+            role,
+            slug,
+            installationId: registration.installationId ?? null,
+          };
+        }).filter(app => !app.installationId);
+
+        const text = buildInstallScript(appsToInstall);
+        return { type: 'text', text };
+      } catch (err) {
+        const msg = err.message || 'unknown error';
+        return { type: 'text', text: `❌ Install script generation failed: ${msg}` };
       }
     },
   });

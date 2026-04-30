@@ -28,6 +28,13 @@ App bot identity — never the human operator's ambient `gh` session.
 | `squad_identity_resolve_token` | Resolve bot GitHub App token for current agent |
 | `squad_identity_rotate_key` | Rotate a GitHub App private key (guided flow) |
 
+**Batch Operation Tools (v1.2.0+):**
+
+| Tool | Purpose |
+|------|---------|
+| `squad_identity_generate_create_script` | Generate bash script for batch GitHub App creation (agent review) |
+| `squad_identity_generate_install_script` | Generate bash script for batch GitHub App installation (agent review) |
+
 **Governance Tools (v1.1.0+):**
 
 | Tool | Purpose |
@@ -52,15 +59,15 @@ ROLE_SLUG="<slug>"  # injected by configure-identity --update-charters; do not e
 The mapping is stored in `.squad/identity/config.json` under `agentNameMap`.
 It is inferred from `.squad/team.md` (the `| Name | Role |` table) during setup.
 
-### GitHub Apps: public vs. custom
+### GitHub Apps: custom (recommended) vs. public (future)
 
-Your role slug corresponds to one of two types of GitHub Apps:
+Your role slug corresponds to a GitHub App. We support two types:
 
-**Public app (default):** `sqd-<role>[bot]`  
-Shared, pre-made apps (e.g., `sqd-backend[bot]`, `sqd-frontend[bot]`). Users just install them during setup — no creation or key management needed.
+**Custom app (recommended):** `{your-github-username}-<role>[bot]`  
+User-created, dedicated apps (e.g., `alice-backend[bot]`, `myteam-frontend[bot]`). You create and own these via `squad-identity create-app --role <role>`. This is the primary path because GitHub App PEM keys belong to the app owner and cannot be shared without a central token broker service.
 
-**Custom app (optional):** `{alias}-<role>[bot]`  
-User-created, dedicated apps (e.g., `myteam-backend[bot]`, `alice-frontend[bot]`). Created via `squad-identity create-app --role <role>` if you want role-specific isolation.
+**Public app (future possibility):** `sqd-<role>[bot]`  
+Shared, pre-made apps (e.g., `sqd-backend[bot]`, `sqd-frontend[bot]`). These would be available in the future if a token broker service is built. Not recommended for current use.
 
 Token resolution works the same way for both: `squad_identity_resolve_token` looks up your role slug in `.squad/identity/config.json`, finds the app ID, and retrieves the PEM from the OS keychain.
 
@@ -90,6 +97,11 @@ suffix so concurrent sessions don't share state.
 **Option 1: Direct token (standard agents):**
 ```bash
 TOKEN=$(squad_identity_resolve_token  roleSlug="<from your charter>")
+```
+
+**Option 1b: Direct token from CLI (non-agent use):**
+```bash
+TOKEN=$(squad-identity resolve-token --role backend)
 ```
 
 **Option 2: Leased token (coordinator-gated agents):**

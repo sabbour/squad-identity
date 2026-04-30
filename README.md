@@ -73,30 +73,38 @@ After init completes you'll see:
 
 Next steps:
   1. Restart Copilot CLI to load the extension
-  2. Call: squad_identity_setup_steps
-     (for first-time setup with no GitHub Apps yet)
-  3. Or if Apps already exist:
-     squad_identity_update_charters
-     squad_identity_doctor
+  2. Create and install GitHub Apps for your agent roles
 ```
 
-Then run the guided setup:
+**Quick setup flow (recommended):**
 
 ```bash
-# Guided setup — creates or imports GitHub Apps, installs them, updates charters
-squad-identity setup
+# Batch-create GitHub Apps for all roles discovered in .squad/team.md
+squad-identity create-apps
+
+# Batch-install registered GitHub Apps into the repo
+squad-identity install-apps
 
 # Verify everything is wired up
 squad-identity doctor
 ```
+
+**Or use guided interactive setup:**
+
+```bash
+# Guided setup — walks through all steps interactively
+squad-identity setup
+```
+
+The recommended flow (`create-apps` → `install-apps` → `doctor`) is faster for automated setups, while `setup` is better for first-time interactive exploration.
 
 `squad-identity setup` walks you through everything:
 
 1. Reads `.squad/team.md` to discover agent roles
 2. Shows discovered roles and their status
 3. For each role, offers choices:
-   - **Use public app** (recommended): Install the pre-made `sqd-<role>` public GitHub App — no creation needed
-   - **Create custom app**: Create your own GitHub App named `{your-alias}-<role>` (opens browser manifest flow)
+   - **Create custom app** (recommended): Create your own GitHub App named `{your-github-username}-<role>` (opens browser manifest flow)
+   - **Use public app**: Install the pre-made `sqd-<role>` public GitHub App (if available)
    - **Import existing app**: Use an existing GitHub App (provide app ID, slug, installation ID)
    - **Skip** the role for now
 4. Installs each app into the repository
@@ -105,15 +113,15 @@ squad-identity doctor
 
 #### Create a custom app
 
-To create a dedicated GitHub App with your own naming (e.g., `{your-alias}-backend`) without running the full guided setup:
+To create a dedicated GitHub App with your own naming (e.g., `{your-github-username}-backend`) without running the full guided setup:
 
 ```bash
 squad-identity create-app --role backend
 ```
 
-This opens the GitHub manifest flow in your browser and creates an app named `{your-alias}-<role>`. The PEM key is stored in the OS keychain automatically.
+This opens the GitHub manifest flow in your browser and creates an app named `{your-github-username}-<role>`. The PEM key is stored in the OS keychain automatically.
 
-> **Note:** Most users should use the public `sqd-<role>` apps during setup. Use this command only if you want a separate, dedicated app for a role.
+> **Why custom apps are recommended:** GitHub App PEM private keys belong to the app owner only — they are never shared. Without a central token broker service (which squad-identity does not provide), there is no secure way for multiple teams to use the same shared PEM. Each user creates their own GitHub Apps to ensure they own and control the PEM keys.
 
 #### Already have GitHub Apps?
 
@@ -151,30 +159,31 @@ creation for those roles.
 
 ---
 
-## GitHub Apps: two-tier model
+## GitHub Apps: custom (recommended) vs. public (future)
 
-`squad-identity` supports two ways to deploy bot apps:
+`squad-identity` supports two GitHub App deployment modes:
 
-### Tier 1: Public apps (recommended)
+### Primary: Custom apps (create your own)
+
+Create your own dedicated GitHub Apps with naming pattern `{your-github-username}-<role>`:
+- Use this for all production and active development deployments
+- Examples: `alice-backend[bot]`, `devteam-frontend[bot]`, `myorg-security[bot]`, etc.
+- Created on-demand via `squad-identity create-app --role <role>`
+- You own and control the PEM keys in your OS keychain
+
+**Why:** GitHub App PEM private keys belong to the app owner and cannot be shared. There is no way to securely provide a shared PEM without a central token broker service. Each user must create their own GitHub Apps.
+
+### Optional: Public apps (`sqd-*` — future possibility)
 
 Pre-made, shared GitHub Apps with the `sqd-*` naming convention:
 - `sqd-lead[bot]`, `sqd-backend[bot]`, `sqd-frontend[bot]`, `sqd-tester[bot]`, etc.
 - Created and maintained by the Squad team
-- Just **install** them into your repo — no creation or key management needed
-- Shared across your team; anyone can use them
-- Default choice during `squad-identity setup`
-
-### Tier 2: Custom apps (optional)
-
-Create your own dedicated GitHub Apps with naming pattern `{your-alias}-<role>`:
-- Use when you want role-specific apps isolated to your team/org
-- Named like `myteam-backend[bot]`, `alice-frontend[bot]`, etc.
-- Created on-demand via `squad-identity create-app --role <role>`
-- You manage the PEM keys in your OS keychain
+- Available in the future if a token broker service is built
+- Not recommended for current use (no PEM distribution mechanism)
 
 **How to choose:**
-- **Starting out?** Use Tier 1 (`sqd-*` public apps) — simplest and fastest.
-- **Need isolation?** Use Tier 2 (custom apps) — fine-grained control per role.
+- **All current users:** Create custom apps via `squad-identity create-app --role <role>`
+- **Future (if broker service exists):** Option to install pre-made `sqd-*` public apps
 
 ---
 
@@ -230,7 +239,7 @@ squad-identity doctor   # verify health first
 
 ```mermaid
 graph LR
-    A["Extension<br/>.github/extensions/squad-identity/"] -->|registers tools| B["10 CLI Tools<br/>squad_identity_*"]
+    A["Extension<br/>.github/extensions/squad-identity/"] -->|registers tools| B["12 CLI Tools<br/>squad_identity_*"]
     B -->|calls| C["Lib Scripts<br/>configure-identity, resolve-token,<br/>attest-write, keychain, etc."]
     D["Skill<br/>.squad/skills/squad-identity/SKILL.md"] -->|read by agents| E["Agent at Spawn<br/>follows Steps A-D"]
     F["Config<br/>.squad/identity/config.json"] -->|stores| G["Mappings<br/>agent name → role slug → app ID"]
@@ -242,7 +251,7 @@ graph LR
 
 **Three layers, all upgrade-proof:**
 
-1. **Extension** — registers 10 `squad_identity_*` tools in every Copilot CLI
+1. **Extension** — registers 12 `squad_identity_*` tools in every Copilot CLI
    session. Tools call `lib/*.mjs` directly.
 2. **Skill** — protocol reference injected into every agent's context at spawn.
    Defines Steps A-D (fail-closed setup → token resolution → inline usage
@@ -333,7 +342,10 @@ curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/{owner}/{rep
 | Command | Description |
 |---------|-------------|
 | `squad-identity init [repo]` | Install extension, skill, and config template into a Squad repo |
-| `squad-identity setup [repo]` | Guided setup: discover roles, create/import apps, install, update charters |
+| `squad-identity setup [repo]` | Guided interactive setup: discover roles, create/import apps, install, update charters |
+| `squad-identity create-apps [--roles role1,role2]` | Batch-create GitHub Apps for all discovered roles (optional filter) |
+| `squad-identity install-apps [--roles role1,role2]` | Batch-install registered apps into the repo (optional filter) |
+| `squad-identity resolve-token --role <r>` | Resolve a bot GitHub installation token for a role (CLI use, not agent) |
 | `squad-identity create-app --role <r>` | Create a new GitHub App for a single role (browser manifest flow) |
 | `squad-identity find-app --name <n>` | Find an existing GitHub App by name, install it, register for a role |
 | `squad-identity import-app --role <r>` | Register an existing GitHub App for a role (provide app ID, slug, PEM) |
@@ -344,7 +356,7 @@ curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/{owner}/{rep
 
 ## Copilot CLI tools
 
-After restarting Copilot CLI, these 10 tools are available in every session:
+After restarting Copilot CLI, these 12 tools are available in every session:
 
 **Admin tools:**
 
@@ -363,6 +375,13 @@ After restarting Copilot CLI, these 10 tools are available in every session:
 |------|-------------|
 | `squad_identity_resolve_token` | Resolve bot token for the current agent's `ROLE_SLUG` |
 | `squad_identity_rotate_key` | Rotate a GitHub App private key (guided browser + keychain flow) |
+
+**Batch operation tools (v1.2.0+):**
+
+| Tool | What it does |
+|------|-------------|
+| `squad_identity_generate_create_script` | Generate bash script for batch GitHub App creation (agent review + approval) |
+| `squad_identity_generate_install_script` | Generate bash script for batch GitHub App installation (agent review + approval) |
 
 **Governance tools (v1.1.0+):**
 

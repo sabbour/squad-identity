@@ -22,10 +22,10 @@ Each layer is upgrade-proof and independent. Agents use `squad_identity_*` tools
 
 | File | Purpose |
 |------|---------|
-| `bin/squad-identity.mjs` | CLI dispatcher; entry point for `squad-identity init/setup/create-app/find-app/import-app/upgrade/rotate-key/doctor/status` |
-| `extensions/squad-identity/extension.mjs` | Registers 8 tools; tools call lib scripts directly |
+| `bin/squad-identity.mjs` | CLI dispatcher; entry point for `squad-identity init/setup/create-apps/install-apps/resolve-token/create-app/find-app/import-app/upgrade/rotate-key/doctor/status` |
+| `extensions/squad-identity/extension.mjs` | Registers 12 tools; tools call lib scripts directly |
 | `extensions/squad-identity/lib/*.mjs` | 6 lib scripts: configure-identity, create-app, install-apps, resolve-token, keychain, sync-secrets |
-| `squad-identity/SKILL.md` | Agent protocol; read by agents at spawn time (Steps A–C, anti-patterns) |
+| `squad-identity/SKILL.md` | Agent protocol; read by agents at spawn time (Steps A–D, anti-patterns) |
 | `identity/config.json.template` | Template copied to `.squad/identity/config.json` on init |
 
 ## Critical Concepts for Agents
@@ -37,13 +37,13 @@ Agents derive their identity by:
 2. Finding their GitHub App ID for that role slug
 3. Resolving the PEM key from OS keychain (keyed by app ID) or environment variables
 
-The role slug is injected into each agent's charter by `configure-identity.mjs --update-charters` during setup. Example: an agent named "Tank" with role "Backend Dev" might map to role slug `backend`, using app `sqd-backend[bot]` (public) or `myteam-backend[bot]` (custom).
+The role slug is injected into each agent's charter by `configure-identity.mjs --update-charters` during setup. Example: an agent named "Tank" with role "Backend Dev" might map to role slug `backend`, using custom app `your-username-backend[bot]` or future public app `sqd-backend[bot]`.
 
-### GitHub Apps: public vs. custom
+### GitHub Apps: custom (recommended) vs. public (future)
 
-**Public apps (default):** `sqd-<role>[bot]` — pre-created, shared, just install during setup.
+**Custom apps (recommended):** `{your-github-username}-<role>[bot]` — create your own via `squad-identity create-app --role <role>`. You own the PEM keys. This is the primary path because GitHub App PEM keys belong to the app owner and cannot be shared without a central token broker service (which squad-identity does not provide).
 
-**Custom apps (optional):** `{your-alias}-<role>[bot]` — create your own via `squad-identity create-app --role <role>` if you want isolation.
+**Public apps (future possibility):** `sqd-<role>[bot]` — pre-created, shared apps (would be available in the future if a token broker service is built). Not recommended for current use.
 
 ### Installation
 
@@ -69,7 +69,26 @@ Manual validation:
 ### Full setup (new repo)
 
 ```bash
-squad-identity setup    # guided: reads team.md, creates apps, installs, updates charters
+squad-identity create-apps    # Batch-create GitHub Apps for discovered roles
+squad-identity install-apps   # Batch-install apps into the repo
+squad-identity doctor         # Verify setup
+```
+
+Or use the guided alternative:
+
+```bash
+squad-identity setup    # Guided: walks through all steps interactively
+```
+
+### Resolving tokens in scripts
+
+```bash
+# CLI command (non-agent use):
+TOKEN=$(squad-identity resolve-token --role backend)
+GH_TOKEN="$TOKEN" gh pr create --title "..." --body "..."
+
+# In agent context, use the tool instead:
+TOKEN=$(squad_identity_resolve_token roleSlug="backend")
 ```
 
 ### Adding a new GitHub App identity

@@ -38,6 +38,22 @@ Implemented the package as a zero-dependency Node ESM CLI with `bin/squad-identi
 
 ## Learnings
 
+### 2026-04-29T20:04:47-07:00 — install-apps project root from cwd
+
+Fixed `extensions/squad-identity/lib/install-apps.mjs` so `getProjectRoot()` walks up from `process.cwd()` to the nearest `.squad` directory instead of deriving a repo path from the installed script location. This makes `squad-identity install-apps` work from user repositories when the lib is executed out of the global npm package, matching the project-root discovery pattern already used by `create-app.mjs`.
+
+### 2026-04-29T20:04:47-07:00 — resolve-token CLI command
+
+Added `resolve-token` to `bin/squad-identity.mjs` as a direct wrapper around `extensions/squad-identity/lib/resolve-token.mjs`, requiring `--role <role>` and writing only the resolved token to stdout so shell capture works cleanly. I also aligned batch CLI behavior so `install-apps` exits 0 with a clear "Nothing to install" message when no registrations exist, matching the new non-interactive command contract.
+
+### 2026-04-29T20:04:47-07:00 — batch create/install CLI commands
+
+Added `create-apps` and `install-apps` to `bin/squad-identity.mjs` as direct-execution CLI commands that reuse shared role discovery and app registration loading instead of generating scripts. `create-apps` batch-runs `create-app.mjs --role <role> --icon` for missing roles then runs doctor, while `install-apps` filters registrations missing `installationId`, delegates to `install-apps.mjs`, and finishes with `--update-charters`; both support comma-separated `--roles` filters.
+
+### 2026-04-29T20:04:47-07:00 — generated create/install scripts in extension
+
+Added two extension-only tools in `extensions/squad-identity/extension.mjs` that read `.squad/team.md` and `.squad/identity/apps/*.json` directly, then return reviewable bash scripts instead of executing browser-driven setup. The create script tool filters missing roles, checks `node --version` + `gh auth status`, emits sequential `squad-identity create-app --role <role>` commands, and ends with `squad-identity doctor`; the install script tool filters apps missing `installationId`, opens each install URL with `gh browse`, waits for confirmation, and finishes with `squad-identity setup`.
+
 ### 2026-04-29T18:51:47.406-07:00 — Linux keychain availability probe
 
 Fixed `keychainAvailable()` in `extensions/squad-identity/lib/keychain.mjs` to stop using `secret-tool --version`, which always exits non-zero on Linux. The availability probe now uses `secret-tool lookup` against a guaranteed-miss key and treats exit 1 with no stderr as healthy, so libsecret/D-Bus environments are recognized correctly.

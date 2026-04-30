@@ -37,6 +37,9 @@ describe('CLI: version and help', () => {
     assert.ok(stdout.includes('Usage:'));
     assert.ok(stdout.includes('init'));
     assert.ok(stdout.includes('setup'));
+    assert.ok(stdout.includes('create-apps'));
+    assert.ok(stdout.includes('install-apps'));
+    assert.ok(stdout.includes('resolve-token'));
     assert.ok(stdout.includes('upgrade'));
     assert.ok(stdout.includes('doctor'));
     assert.ok(stdout.includes('status'));
@@ -86,7 +89,7 @@ describe('CLI: negative paths', () => {
   });
 
   it('command --help prints command-specific help', () => {
-    for (const cmd of ['init', 'upgrade', 'rotate-key', 'doctor', 'status', 'setup']) {
+    for (const cmd of ['init', 'upgrade', 'rotate-key', 'doctor', 'status', 'setup', 'create-apps', 'install-apps', 'resolve-token']) {
       const { status, stdout } = runCli([cmd, '--help']);
       assert.equal(status, 0, `${cmd} --help should exit 0`);
       assert.ok(stdout.includes('Usage:'), `${cmd} --help should contain Usage:`);

@@ -100,3 +100,70 @@ Scribe merged Oracle's 3 inbox entries into the unified `.squad/decisions.md`:
 Created orchestration log: `.squad/orchestration-log/2026-04-30T01:43:07Z-Oracle.md` summarizing this session's documentation work (4 files modified, design decisions embedded, v1.1.0 consistency verified).
 
 Oracle's work is now part of the team decision ledger. Skills are ready for first agent use — confidence will upgrade to "medium" after successful first use and anti-pattern collection.
+
+### 2026-04-29T19:58:43-07:00: Flipped GitHub Apps recommendation — custom now primary
+
+**Directive:** Ahmed discovered that shared public GitHub Apps (`sqd-*`) are architecturally impossible. PEM keys belong to the app owner only; there's no secure way to share them without a central token broker service. Squad-identity provides no broker, so the "just install sqd-* apps" promise was false.
+
+**Solution:** Flip the docs to make custom apps (`{your-github-username}-<role>[bot]`) the PRIMARY recommendation and demote `sqd-*` to a "future possibility if a broker is built."
+
+**Changes made:**
+1. **README.md**
+   - Swapped Tier 1/Tier 2 language → "Primary: Custom apps" + "Optional: Public apps (future)"
+   - Line 98: Setup flow now offers custom as first choice
+   - Line 116: Replaced "use sqd-* by default" note with WHY explanation (PEM ownership)
+   - Lines 154–177: Full "GitHub Apps" section rewritten with new rationale
+
+2. **SKILL.md** (agent-facing protocol)
+   - Lines 55–66: Updated "GitHub Apps" section — custom is "recommended", public is "future possibility"
+   - Explained WHY: "GitHub App PEM keys belong to the app owner and cannot be shared without a central token broker service"
+
+3. **.github/copilot-instructions.md** (Copilot-level instructions)
+   - Line 40: Updated example to show custom app as primary option
+   - Lines 42–46: Rewrote "GitHub Apps: custom vs. public" section with WHY explanation
+
+**Key message (threaded through all three files):**
+> "GitHub App PEM private keys belong to the app owner only — they are never shared. Without a central token broker service (which squad-identity does not provide), there is no secure way for multiple teams to use the same shared PEM. Each user creates their own GitHub Apps to ensure they own and control the PEM keys."
+
+**Naming clarity:**
+- Custom apps use pattern: `{your-github-username}-<role>[bot]` (derived from `create-app.mjs` line 988)
+- Public apps (reserved for future): `sqd-<role>[bot]`
+
+**Architectural principle enforced:** The docs now reflect the actual constraint of GitHub Apps — ownership of credentials determines distribution model.
+
+### 2026-04-30T20:15:34-07:00: v1.2.0 batch operations docs — create-apps, install-apps, resolve-token
+
+**Changes made:**
+1. **README.md**
+   - Updated Quick start (Step 1) to feature `create-apps` → `install-apps` → `doctor` as the recommended flow (after `init`)
+   - Kept `setup` as the guided interactive alternative
+   - Updated CLI commands table: added 3 new commands, renumbered tool count from 10 to 12
+   - Updated Copilot CLI tools table: split "Agent runtime tools" and added new "Batch operation tools" section with `squad_identity_generate_create_script` and `squad_identity_generate_install_script`
+   - Updated Architecture mermaid diagram: changed "10 CLI Tools" to "12 CLI Tools"
+
+2. **SKILL.md** (agent-facing protocol)
+   - Updated Available Tools table: added "Batch Operation Tools (v1.2.0+)" section with `squad_identity_generate_create_script` and `squad_identity_generate_install_script`
+   - Updated Step B token resolution: added Option 1b for CLI use case — `squad-identity resolve-token --role <role>` with shell capture pattern
+
+3. **.github/copilot-instructions.md** (Copilot-level instructions)
+   - Updated Key File Reference: noted entry point includes new CLI commands (create-apps, install-apps, resolve-token)
+   - Updated tool count in description: 8 tools → 12 tools
+   - Updated Common Agent Tasks: added full section for batch setup flow, split guided alternative, added resolve-token usage section with shell capture pattern
+
+**Design principles applied:**
+- **CLI vs. tool split:** `squad-identity resolve-token --role <role>` for CLI use; `squad_identity_resolve_token roleSlug=...` for agent-in-context use
+- **Batch vs. single:** `create-apps` / `install-apps` batch commands reduce setup friction; single commands (`create-app`, `find-app`, `import-app`) remain for fine-grained control
+- **Flow hierarchy:** Docs now surface recommended flow first (batch), then alternatives (guided setup, single commands)
+- **Agent scripts:** Batch operation tools generate bash scripts for agent review before execution — agents can inspect and approve before running
+
+**Verification done:**
+- Confirmed all 12 tools in extension.mjs match the docs
+- Batch operation tools generate scripts, not execute directly (align with agent review requirement)
+- All three doc surfaces (README, SKILL, copilot-instructions) now consistently reference the three new commands
+
+**For future docs:** When adding new agent-facing tools, clearly distinguish:
+- CLI commands (user-facing, `squad-identity ...`)
+- Extension tools (Copilot session, `squad_identity_...`)
+- Script generators vs. direct executors (agent approval gates)
+
+---

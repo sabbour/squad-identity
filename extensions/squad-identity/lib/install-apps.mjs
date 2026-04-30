@@ -2,7 +2,7 @@
 
 import { execFile, spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, extname, join } from "node:path";
+import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
 
@@ -75,10 +75,20 @@ function parseArgs(argv) {
 }
 
 function getProjectRoot() {
-  const scriptDir = dirname(fileURLToPath(import.meta.url));
-  // From extensions/squad-identity/lib/ → go up 4 levels to repo root
-  // lib/ → squad-identity/ → extensions/ → .github/ → repo_root
-  return join(scriptDir, "..", "..", "..", "..");
+  let currentDir = resolve(process.cwd());
+
+  while (true) {
+    if (existsSync(join(currentDir, ".squad"))) {
+      return currentDir;
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) {
+      fail('Could not find repository root containing ".squad". Run this from the repo.');
+    }
+
+    currentDir = parentDir;
+  }
 }
 
 function loadIdentityConfig(projectRoot) {
