@@ -14,14 +14,14 @@ const EXIT_USER = 1;
 const EXIT_SYSTEM = 2;
 
 const ROLE_KEYWORDS = {
-  lead: ['lead', 'architect', 'tech lead'],
-  frontend: ['frontend', 'ui', 'design'],
-  backend: ['backend', 'api', 'server'],
+  lead: ['lead', 'architect', 'tech lead', 'principal', 'staff'],
+  frontend: ['frontend', 'ui', 'design', 'front-end'],
+  backend: ['backend', 'api', 'server', 'back-end', 'core dev', 'core developer', 'software engineer', 'engineer', 'developer', 'dev'],
   tester: ['test', 'qa', 'quality'],
   security: ['security', 'auth', 'compliance'],
   codereview: ['code review', 'reviewer', 'review'],
-  devops: ['devops', 'infra', 'platform'],
-  docs: ['docs', 'devrel', 'writer'],
+  devops: ['devops', 'infra', 'platform', 'sre', 'ops'],
+  docs: ['docs', 'devrel', 'writer', 'technical writer'],
   scribe: ['scribe'],
   data: ['data', 'database', 'analytics'],
 };
@@ -154,20 +154,53 @@ function discoverNeededRoles(target) {
     failUser(`.squad/team.md not found at ${teamMdPath}. Create it with your team roster first.`);
   }
 
-  const teamContent = readFileSync(teamMdPath, 'utf-8').toLowerCase();
-  const neededRoles = [];
+  const teamContent = readFileSync(teamMdPath, 'utf-8');
+  const lower = teamContent.toLowerCase();
+  const neededRoles = new Set();
 
+  // Match known role keywords
   for (const [role, keywords] of Object.entries(ROLE_KEYWORDS)) {
-    if (keywords.some(keyword => teamContent.includes(keyword))) {
-      neededRoles.push(role);
+    if (keywords.some(keyword => lower.includes(keyword))) {
+      neededRoles.add(role);
     }
   }
 
-  if (neededRoles.length === 0) {
+  // Parse Members table for unmatched roles — slugify as fallback
+  const lines = teamContent.split('\n');
+  let inTable = false;
+  let headerPassed = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^##\s+Members/i.test(trimmed)) { inTable = true; headerPassed = false; continue; }
+    if (inTable && trimmed.startsWith('#')) { inTable = false; continue; }
+    if (!inTable || !trimmed.startsWith('|')) continue;
+    const cells = trimmed.split('|').map(c => c.trim()).filter(Boolean);
+    if (cells.length < 2) continue;
+    if (!headerPassed) {
+      if (/name/i.test(cells[0])) { headerPassed = true; continue; }
+      if (/^[-:]+$/.test(cells[0])) continue;
+    }
+    if (/^[-:]+$/.test(cells[0])) continue;
+    const [name, role] = cells;
+    if (!name || !role) continue;
+    if (/^(Squad|Ralph|@copilot|Scribe)/i.test(name)) continue;
+    // Check if this role already matched a known keyword
+    const roleLower = role.toLowerCase();
+    const alreadyMatched = [...neededRoles].some(r =>
+      (ROLE_KEYWORDS[r] || []).some(kw => roleLower.includes(kw))
+    );
+    if (!alreadyMatched) {
+      // Slugify the role description as fallback
+      const slugified = roleLower.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      if (slugified) neededRoles.add(slugified);
+    }
+  }
+
+  if (neededRoles.size === 0) {
     failUser('Could not infer any roles from .squad/team.md. Check the Members table.');
   }
 
-  return neededRoles;
+  return [...neededRoles];
 }
 
 function runLibScript(scriptName, scriptArgs, cwd) {

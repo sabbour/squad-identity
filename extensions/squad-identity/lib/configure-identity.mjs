@@ -51,15 +51,16 @@ const COPILOT_INSTRUCTIONS = join(REPO_ROOT, '.github', 'copilot-instructions.md
 // ---------------------------------------------------------------------------
 
 const ROLE_KEYWORDS = {
-  lead: ['lead', 'leader', 'coordinator', 'architect', 'tech lead', 'principal'],
+  lead: ['lead', 'leader', 'coordinator', 'architect', 'tech lead', 'principal', 'staff'],
   frontend: ['frontend', 'front-end', 'ui', 'ux', 'react', 'vue', 'angular', 'web'],
-  backend: ['backend', 'back-end', 'api', 'server', 'database', 'db', 'service'],
+  backend: ['backend', 'back-end', 'api', 'server', 'service', 'core dev', 'core developer', 'software engineer', 'engineer', 'developer', 'dev'],
   tester: ['tester', 'test', 'qa', 'quality', 'observability', 'monitoring'],
   security: ['security', 'sec', 'appsec', 'auth', 'compliance'],
   codereview: ['codereview', 'code review', 'reviewer', 'review', 'watchdog', 'critic'],
   devops: ['devops', 'dev ops', 'ops', 'platform', 'infra', 'infrastructure', 'sre', 'ci', 'cd'],
   docs: ['docs', 'documentation', 'doc', 'writer', 'devrel', 'technical writer'],
   scribe: ['scribe', 'logger', 'session logger', 'memory'],
+  data: ['data', 'database', 'db', 'analytics'],
 };
 
 // ---------------------------------------------------------------------------
@@ -136,7 +137,12 @@ function inferRoleSlug(roleDesc, configApps) {
       if (lower.includes(key)) return key;
     }
   }
-  return null;
+  // Final fallback: slugify the role description itself
+  // e.g. "Core Dev" → "core-dev", "ML Engineer" → "ml-engineer"
+  const slugified = lower
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return slugified || null;
 }
 
 /**
