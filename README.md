@@ -153,12 +153,9 @@ creation for those roles.
 
 ---
 
-| Channel | Install command | Stability |
-|---------|----------------|-----------|
-| Stable (default) | `npm i -g @sabbour/squad-identity` | Production-ready, fully tested |
-| Insider | `npm i -g @sabbour/squad-identity@insider` | Latest features, may have rough edges |
+Install with `npm i -g @sabbour/squad-identity`.
 
-Work lands on `insider` first, then promotes to `main` when stable.
+Development happens on `main`, and releases are published from tagged Changesets releases after the automated "Version Packages" PR is merged.
 
 ---
 
