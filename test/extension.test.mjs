@@ -18,15 +18,18 @@ describe('Extension: tool registration', () => {
   const toolNameMatches = [...extensionSource.matchAll(/name:\s*'(squad_identity_\w+)'/g)];
   const registeredTools = toolNameMatches.map(m => m[1]);
 
-  it('registers exactly 7 tools', () => {
-    assert.equal(registeredTools.length, 7,
-      `Expected 7 tools, found: ${registeredTools.join(', ')}`);
+  it('registers exactly 10 tools', () => {
+    assert.equal(registeredTools.length, 10,
+      `Expected 10 tools, found: ${registeredTools.join(', ')}`);
   });
 
   const expectedTools = [
+    'squad_identity_status',
     'squad_identity_doctor',
-    'squad_identity_configure',
-    'squad_identity_setup',
+    'squad_identity_update_charters',
+    'squad_identity_update_copilot_instructions',
+    'squad_identity_setup_steps',
+    'squad_identity_setup_all',
     'squad_identity_resolve_token',
     'squad_identity_rotate_key',
     'squad_identity_lease_token',
