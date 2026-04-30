@@ -272,6 +272,20 @@ function getConfiguredApps(registrations, usedIdentitySlugs, selectedRole) {
     fail("No app registrations found in .squad/identity/apps/.");
   }
 
+  // When a specific role is requested, bypass team roster matching — the caller
+  // (e.g., setup) already decided this role is needed.
+  if (selectedRole) {
+    const reg = registrations.get(selectedRole);
+    if (!reg) {
+      fail(`Role "${selectedRole}" has no registration in .squad/identity/apps/${selectedRole}.json.`);
+    }
+    const appSlug = reg.slug ?? reg.appSlug ?? null;
+    if (!appSlug) {
+      fail(`No slug found for role "${selectedRole}" in .squad/identity/apps/${selectedRole}.json.`);
+    }
+    return [{ role: selectedRole, appSlug }];
+  }
+
   if (!usedIdentitySlugs.size) {
     fail("No team member roles in .squad/team.md map to configured app identities.");
   }
@@ -283,23 +297,17 @@ function getConfiguredApps(registrations, usedIdentitySlugs, selectedRole) {
       appSlug: reg.slug ?? reg.appSlug ?? null,
     }));
 
-  const filteredApps = selectedRole ? teamApps.filter(app => app.role === selectedRole) : teamApps;
-
-  if (!filteredApps.length) {
-    fail(
-      selectedRole
-        ? `Role "${selectedRole}" is not both registered in .squad/identity/apps/ and used by the current team.`
-        : "No registered apps are used by the current team.",
-    );
+  if (!teamApps.length) {
+    fail("No registered apps are used by the current team.");
   }
 
-  for (const app of filteredApps) {
+  for (const app of teamApps) {
     if (!app.appSlug) {
       fail(`No slug found for role "${app.role}" in .squad/identity/apps/${app.role}.json.`);
     }
   }
 
-  return filteredApps;
+  return teamApps;
 }
 
 function canResolveInstallationToken(projectRoot, role) {

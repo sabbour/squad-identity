@@ -298,7 +298,7 @@ async function verifyRoleHealth(role, cfgApp, registration, keychainModule, keyc
 
   const installationId = registration.data.installationId;
   if (!installationId) {
-    console.log(`    ❌ No installation ID — run: squad-identity install-apps --roles ${role}`);
+    console.log(`    ❌ No installation ID — run: squad-identity setup`);
     return false;
   }
   console.log(`    ✅ Installation ID: ${installationId}`);
@@ -313,7 +313,7 @@ async function verifyRoleHealth(role, cfgApp, registration, keychainModule, keyc
   try {
     const token = execFileSync(
       process.execPath,
-      [resolveTokenPath, role],
+      [resolveTokenPath, '--required', role],
       { cwd: REPO_ROOT, encoding: 'utf-8', timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] }
     ).trim();
 
@@ -324,7 +324,9 @@ async function verifyRoleHealth(role, cfgApp, registration, keychainModule, keyc
 
     console.log(`    ✅ Token resolves (length: ${token.length})`);
   } catch (err) {
-    console.log(`    ❌ Token resolution failed: ${err.stderr?.trim() || err.message}`);
+    const stderr = err.stderr?.trim() || '';
+    const msg = stderr || err.message;
+    console.log(`    ❌ Token resolution failed: ${msg}`);
     return false;
   }
 
