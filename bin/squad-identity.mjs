@@ -22,6 +22,7 @@ Usage:
 Commands:
   init [target-repo]     Install squad-identity into a Squad repo
   setup [target-repo]    Guided setup: create or import apps for all roles
+  create-app --role <r>  Create a new GitHub App for a role (manifest flow)
   find-app --name <n>    Find an existing GitHub App and register it for a role
   import-app --role <r>  Register an existing GitHub App for a role
   upgrade [target-repo]  Refresh installed files and copilot instructions
@@ -41,6 +42,7 @@ function printCommandHelp(command) {
     setup: `Usage: squad-identity setup [target-repo]\n\nGuided setup that reads .squad/team.md, shows discovered roles, and creates or imports a GitHub App for each one. Runs init first if not already done.\n\nFlow:\n  1. Reads team.md to discover roles\n  2. Shows roles and asks for confirmation\n  3. For each role: [C]reate new / [i]mport existing / [s]kip\n  4. Installs all apps into the repo\n  5. Captures installation IDs\n  6. Updates charters with ROLE_SLUG`,
     upgrade: `Usage: squad-identity upgrade [target-repo]\n\nRefreshes extension and skill files, then reapplies the squad-identity block in .github/copilot-instructions.md. Existing identity config and PEM keys are never touched.`,
     'rotate-key': `Usage: squad-identity rotate-key --role <role> [--pem <path>]\n\nRotate a GitHub App private key for a role.\n\nWithout --pem:\n  Opens the GitHub App settings page so you can generate a new key.\n  After downloading, run again with --pem to import.\n\nWith --pem:\n  Imports the PEM file into the OS keychain, replacing any existing key.`,
+    'create-app': `Usage: squad-identity create-app --role <role> [--owner <username>] [--prefix <prefix>] [--name <name>]\n\nCreate a new GitHub App for a role using the GitHub manifest flow.\nOpens a browser to complete the OAuth authorization.\n\nRequired:\n  --role <role>       Role slug (e.g., lead, backend, frontend, tester)\n\nOptional:\n  --owner <username>  GitHub username or org for the app (default: authenticated user)\n  --prefix <prefix>   App name prefix (default: derived from repo name)\n  --name <name>       Override the generated app name entirely\n\nThe manifest flow creates the app, generates a PEM key, and stores it\nin the OS keychain. The app registration is saved to .squad/identity/apps/<role>.json.`,
     'import-app': `Usage: squad-identity import-app --role <role> --app-id <id> --app-slug <slug> --pem <path> [--force]\n\nRegister an existing GitHub App for a role. Use this when you already have a\nGitHub App created (manually or from another repo) instead of creating a new one.\n\nRequired:\n  --role <role>       Role slug (e.g., lead, backend, frontend, tester)\n  --app-id <id>      GitHub App ID (numeric)\n  --app-slug <slug>  GitHub App slug (e.g., my-squad-backend)\n  --pem <path>       Path to the PEM private key file\n\nOptional:\n  --client-id <id>   OAuth client ID (if known)\n  --force            Overwrite existing role registration without prompting\n\nThe PEM is stored in the OS keychain and the local file is NOT kept.\nThe app registration is saved to .squad/identity/apps/<role>.json.`,
     'find-app': `Usage: squad-identity find-app --name <name> [--org <org>] [--role <role>] [--pem <path>] [--force]\n\nSearch for an existing GitHub App by name or slug across user and org installations, then register it for a Squad role.\n\nRequired:\n  --name <name>     App name or slug to search for\n\nOptional:\n  --org <org>       Search this organization's installations too\n  --role <role>     Role slug to register under (prompts if omitted)\n  --pem <path>      Path to PEM private key file (skip to provide later)\n  --force           Overwrite existing role registration without prompting\n\nSearch order:\n  1. Public app lookup by slug (GET /apps/{slug})\n  2. User installations (GET /user/installations)\n  3. Org installations (GET /orgs/{org}/installations) if --org given\n\nAfter finding the app, opens the GitHub install page in the browser and\nauto-detects the installation ID (polls for 2 min, falls back to manual).\nThe PEM key is optional — you can provide it later via import-app or setup.`,
     doctor: `Usage: squad-identity doctor\n\nRuns the existing configure-identity.mjs --doctor health check in the current Squad repo.`,
@@ -514,6 +516,17 @@ if (command === '--version' || command === '-v') {
   else {
     const findApp = join(PACKAGE_ROOT, 'extensions', 'squad-identity', 'lib', 'find-app.mjs');
     const result = spawnSync(process.execPath, [findApp, ...args], {
+      cwd: process.cwd(),
+      stdio: 'inherit',
+    });
+    if (result.error) failSystem(result.error.message);
+    process.exit(result.status ?? 0);
+  }
+} else if (command === 'create-app') {
+  if (args.includes('--help') || args.includes('-h')) printCommandHelp('create-app');
+  else {
+    const createApp = join(PACKAGE_ROOT, 'extensions', 'squad-identity', 'lib', 'create-app.mjs');
+    const result = spawnSync(process.execPath, [createApp, ...args], {
       cwd: process.cwd(),
       stdio: 'inherit',
     });
