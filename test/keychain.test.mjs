@@ -1,5 +1,6 @@
-import { describe, it, beforeEach, afterEach, mock } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 // We test the keychain module's logic by mocking child_process
 // Since the actual OS keychain may not be available in CI, we test:
@@ -50,6 +51,51 @@ describe('Keychain module', async () => {
   it('keychainAvailable returns boolean', () => {
     const result = keychain.keychainAvailable();
     assert.equal(typeof result, 'boolean');
+  });
+
+  it('keychainAvailable treats linux secret-tool lookup miss as available', async () => {
+    const source = readFileSync(
+      new URL('../extensions/squad-identity/lib/keychain.mjs', import.meta.url),
+      'utf-8',
+    );
+    const testSource = `${source.replace(
+      "import { execFileSync, spawnSync } from 'node:child_process';",
+      'const { execFileSync, spawnSync } = globalThis.__keychainTestMocks;',
+    )}\n//# sourceURL=keychain-linux-probe-test-${Date.now()}.mjs`;
+
+    const restorePlatform = process.platform;
+    globalThis.__keychainTestMocks = {
+      execFileSync() {
+        throw new Error('linux availability check should not use execFileSync');
+      },
+      spawnSync(command, args) {
+        assert.equal(command, 'secret-tool');
+        assert.deepEqual(args, ['lookup', 'service', '__squad_identity_probe__', 'account', '__probe__']);
+        return {
+          status: 1,
+          signal: null,
+          error: undefined,
+          stderr: '',
+        };
+      },
+    };
+
+    Object.defineProperty(process, 'platform', {
+      value: 'linux',
+      configurable: true,
+    });
+
+    try {
+      const linuxKeychain = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(testSource)}`);
+      linuxKeychain.resetKeychainCache();
+      assert.equal(linuxKeychain.keychainAvailable(), true);
+    } finally {
+      delete globalThis.__keychainTestMocks;
+      Object.defineProperty(process, 'platform', {
+        value: restorePlatform,
+        configurable: true,
+      });
+    }
   });
 
   it('keychainAvailable caches result', () => {

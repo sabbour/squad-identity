@@ -38,6 +38,11 @@ Implemented the package as a zero-dependency Node ESM CLI with `bin/squad-identi
 
 ## Learnings
 
+### 2026-04-29T18:51:47.406-07:00 — Linux keychain availability probe
+
+Fixed `keychainAvailable()` in `extensions/squad-identity/lib/keychain.mjs` to stop using `secret-tool --version`, which always exits non-zero on Linux. The availability probe now uses `secret-tool lookup` against a guaranteed-miss key and treats exit 1 with no stderr as healthy, so libsecret/D-Bus environments are recognized correctly.
+
+
 ### 2026-04-29T13:44:24-07:00 — changesets + CI/CD release pipeline
 
 Set up `@changesets/cli` for automated version management and npm publishing. Key files added:
