@@ -327,6 +327,8 @@ curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/{owner}/{rep
 | `squad-identity rotate-key --role <r>` | Rotate a GitHub App private key (two-step guided flow) |
 | `squad-identity doctor` | Health check: config, keychain, token resolution |
 
+**`--json` flag:** Human-facing commands (`setup`, `init`, `upgrade`, `doctor`) print progress to stderr and only emit JSON to stdout when `--json` is passed. Machine commands (`resolve-token`) always emit to stdout.
+
 ## Copilot CLI tools
 
 After restarting Copilot CLI, these 7 tools are available in every session:
