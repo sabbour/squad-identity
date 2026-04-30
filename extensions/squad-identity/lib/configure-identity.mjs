@@ -51,16 +51,15 @@ const COPILOT_INSTRUCTIONS = join(REPO_ROOT, '.github', 'copilot-instructions.md
 // ---------------------------------------------------------------------------
 
 const ROLE_KEYWORDS = {
-  lead: ['lead', 'leader', 'coordinator', 'architect', 'tech lead', 'principal', 'staff'],
+  lead: ['lead', 'leader', 'coordinator', 'architect', 'tech lead', 'principal'],
   frontend: ['frontend', 'front-end', 'ui', 'ux', 'react', 'vue', 'angular', 'web'],
-  backend: ['backend', 'back-end', 'api', 'server', 'service', 'core dev', 'core developer', 'software engineer', 'engineer', 'developer', 'dev'],
+  backend: ['backend', 'back-end', 'api', 'server', 'database', 'db', 'service'],
   tester: ['tester', 'test', 'qa', 'quality', 'observability', 'monitoring'],
   security: ['security', 'sec', 'appsec', 'auth', 'compliance'],
   codereview: ['codereview', 'code review', 'reviewer', 'review', 'watchdog', 'critic'],
   devops: ['devops', 'dev ops', 'ops', 'platform', 'infra', 'infrastructure', 'sre', 'ci', 'cd'],
   docs: ['docs', 'documentation', 'doc', 'writer', 'devrel', 'technical writer'],
   scribe: ['scribe', 'logger', 'session logger', 'memory'],
-  data: ['data', 'database', 'db', 'analytics'],
 };
 
 // ---------------------------------------------------------------------------
@@ -137,12 +136,7 @@ function inferRoleSlug(roleDesc, configApps) {
       if (lower.includes(key)) return key;
     }
   }
-  // Final fallback: slugify the role description itself
-  // e.g. "Core Dev" → "core-dev", "ML Engineer" → "ml-engineer"
-  const slugified = lower
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-  return slugified || null;
+  return null;
 }
 
 /**
@@ -225,142 +219,6 @@ function cmdStatus() {
 // --doctor
 // ---------------------------------------------------------------------------
 
-function loadRegistrationFiles() {
-  const appsDir = join(IDENTITY_DIR, 'apps');
-  const registrations = new Map();
-  if (!existsSync(appsDir)) return registrations;
-
-  for (const file of readdirSync(appsDir)) {
-    if (!file.endsWith('.json')) continue;
-    const role = file.replace(/\.json$/, '');
-    const path = join(appsDir, file);
-    try {
-      registrations.set(role, { path, data: JSON.parse(readFileSync(path, 'utf-8')), error: null });
-    } catch (error) {
-      registrations.set(role, { path, data: null, error: error instanceof Error ? error.message : String(error) });
-    }
-  }
-
-  return registrations;
-}
-
-function getConfiguredRoles(cfg, registrations) {
-  // Only show roles that the team actually uses (from agentNameMap values)
-  // PLUS any role that is installed in this repo (has installationId)
-  const teamRoles = new Set(Object.values(cfg?.agentNameMap ?? {}));
-
-  // If agentNameMap exists and has entries, filter to relevant roles
-  if (teamRoles.size > 0) {
-    const roles = new Set();
-    for (const role of teamRoles) {
-      if (registrations.has(role) || cfg?.apps?.[role]) {
-        roles.add(role);
-      }
-    }
-    // Also include any role with an installationId (actively installed in this repo)
-    for (const [role, reg] of registrations) {
-      if (reg.data?.installationId) {
-        roles.add(role);
-      }
-    }
-    return [...roles].sort();
-  }
-
-  // Fallback: no agentNameMap — show all registered roles
-  const roles = new Set();
-  for (const role of Object.keys(cfg?.apps ?? {})) {
-    if (!role.startsWith('_')) roles.add(role);
-  }
-  for (const role of registrations.keys()) {
-    roles.add(role);
-  }
-  return [...roles].sort();
-}
-
-async function verifyRoleHealth(role, cfgApp, registration, keychainModule, keychainAvailable, resolveTokenPath) {
-  let ok = true;
-  console.log(`  ${role}`);
-
-  if (!registration) {
-    console.log(`    ❌ No registration file — run: squad-identity create-apps --roles ${role}`);
-    return false;
-  }
-
-  if (registration.error || !registration.data) {
-    console.log(`    ❌ Registration unreadable: ${registration.path}`);
-    if (registration.error) console.log(`       ${registration.error}`);
-    return false;
-  }
-
-  const appId = registration.data.appId ?? cfgApp?.appId;
-  console.log(`    ✅ Registration: ${registration.path.replace(REPO_ROOT + '/', '')} (appId: ${appId ?? 'missing'})`);
-
-  if (!appId || appId === 0) {
-    console.log(`    ❌ Registration missing appId — run: squad-identity create-app --role ${role}`);
-    return false;
-  }
-
-  if (!keychainModule) {
-    console.log('    ⚠ Keychain module unavailable — cannot verify private key locally');
-    return false;
-  }
-
-  if (!keychainAvailable) {
-    console.log('    ❌ OS keychain unavailable — install libsecret-tools (Linux) or use macOS Keychain');
-    return false;
-  }
-
-  let pem = null;
-  try {
-    pem = await keychainModule.keychainLoad(String(appId));
-  } catch {
-    pem = null;
-  }
-
-  if (!pem) {
-    console.log(`    ❌ No private key in keychain — run: squad-identity create-app --role ${role}`);
-    ok = false;
-  } else {
-    console.log('    ✅ Private key in keychain');
-  }
-
-  const installationId = registration.data.installationId;
-  if (!installationId) {
-    console.log(`    ❌ No installation ID — run: squad-identity setup`);
-    return false;
-  }
-  console.log(`    ✅ Installation ID: ${installationId}`);
-
-  if (!pem) return false;
-
-  if (!existsSync(resolveTokenPath)) {
-    console.log('    ❌ resolve-token.mjs missing — run: squad-identity init');
-    return false;
-  }
-
-  try {
-    const token = execFileSync(
-      process.execPath,
-      [resolveTokenPath, '--required', role],
-      { cwd: REPO_ROOT, encoding: 'utf-8', timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] }
-    ).trim();
-
-    if (!token) {
-      console.log('    ❌ Token resolution returned empty output');
-      return false;
-    }
-
-    console.log(`    ✅ Token resolves (length: ${token.length})`);
-  } catch (err) {
-    const stderr = err.stderr?.trim() || '';
-    const msg = stderr || err.message;
-    console.log(`    ❌ Token resolution failed: ${msg}`);
-    return false;
-  }
-
-  return ok;
-}
-
 async function cmdDoctor() {
   console.log('\n🩺 Identity Doctor\n');
   let ok = true;
@@ -374,60 +232,88 @@ async function cmdDoctor() {
 
     if (!cfg.agentNameMap || Object.keys(cfg.agentNameMap).length === 0) {
       console.log('⚠  agentNameMap empty — run --update-charters');
-      ok = false;
     } else {
       console.log(`✅ agentNameMap: ${Object.keys(cfg.agentNameMap).length} agents`);
     }
-  }
 
-  let keychainModule = null;
-  let keychainAvailable = false;
-  try {
-    keychainModule = await import(new URL('./keychain.mjs', import.meta.url));
-  } catch {
-    keychainModule = null;
-  }
-
-  if (keychainModule) {
-    keychainAvailable = await keychainModule.keychainAvailable();
-    if (keychainAvailable) {
-      console.log('✅ OS keychain available');
-    } else {
-      console.log('⚠  OS keychain not available — PEM keys cannot be resolved locally');
-      console.log('   macOS: install Keychain Access (built-in)');
-      console.log('   Linux: install libsecret-tools');
+    const appCount = cfg.apps ? Object.keys(cfg.apps).length : 0;
+    if (appCount === 0) {
+      console.log('❌ No apps registered in config.json');
       ok = false;
+    } else {
+      console.log(`✅ Apps registered: ${appCount}`);
     }
-  } else {
-    console.log('⚠  keychain.mjs not found — skipping keychain check');
-    ok = false;
+
+    // Check keychain availability
+    let keychainModule;
+    try {
+      keychainModule = await import(new URL('./keychain.mjs', import.meta.url));
+    } catch { /* ignore */ }
+
+    if (keychainModule) {
+      const available = await keychainModule.keychainAvailable();
+      if (!available) {
+        console.log('⚠  OS keychain not available — PEM keys cannot be resolved locally');
+        console.log('   macOS: install Keychain Access (built-in)');
+        console.log('   Linux: install libsecret (apt install libsecret-tools)');
+      } else {
+        console.log('✅ OS keychain available');
+        // Check that each app has a PEM in the keychain
+        const apps = cfg.apps ?? {};
+        let keychainKeys = 0;
+        let missingKeys = 0;
+        for (const [role, app] of Object.entries(apps)) {
+          if (role.startsWith('_')) continue;
+          if (app.appId && app.appId !== 0) {
+            try {
+              const pem = await keychainModule.keychainLoad(String(app.appId));
+              if (pem) {
+                keychainKeys++;
+              } else {
+                console.log(`⚠  No PEM in keychain for role "${role}" (appId: ${app.appId})`);
+                missingKeys++;
+              }
+            } catch {
+              console.log(`⚠  Could not load PEM from keychain for role "${role}" (appId: ${app.appId})`);
+              missingKeys++;
+            }
+          }
+        }
+        if (keychainKeys > 0) {
+          console.log(`✅ PEM keys in keychain: ${keychainKeys}`);
+        }
+        if (missingKeys > 0) {
+          ok = false;
+        }
+      }
+    } else {
+      console.log('⚠  keychain.mjs not found — skipping keychain check');
+    }
   }
 
   const resolveTokenPath = join(REPO_ROOT, '.github', 'extensions', 'squad-identity', 'lib', 'resolve-token.mjs');
   if (!existsSync(resolveTokenPath)) {
     console.log('⚠  resolve-token.mjs not found in extension lib — run squad-identity init');
-    ok = false;
   } else {
     console.log('✅ resolve-token.mjs accessible');
   }
 
-  const registrations = loadRegistrationFiles();
-  const roles = getConfiguredRoles(cfg, registrations);
-  if (roles.length === 0) {
-    console.log('❌ No registered roles found in config.json or .squad/identity/apps/.');
-    ok = false;
-  } else {
-    console.log('\nPer-role health:');
-    for (const role of roles) {
-      const roleOk = await verifyRoleHealth(
-        role,
-        cfg?.apps?.[role] ?? null,
-        registrations.get(role) ?? null,
-        keychainModule,
-        keychainAvailable,
-        resolveTokenPath,
-      );
-      if (!roleOk) ok = false;
+  if (cfg && cfg.apps?.lead) {
+    console.log('\nTesting token resolution for "lead" role...');
+    try {
+      const result = execFileSync(
+        process.execPath,
+        [resolveTokenPath, 'lead'],
+        { encoding: 'utf-8', timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] }
+      ).trim();
+      if (result && result.length > 0) {
+        console.log('✅ Token resolved for lead (length:', result.length + ')');
+      } else {
+        console.log('⚠  Token resolution returned empty for lead');
+      }
+    } catch (err) {
+      console.log('❌ Token resolution failed for lead:', err.stderr?.trim() || err.message);
+      ok = false;
     }
   }
 
