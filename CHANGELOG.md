@@ -1,5 +1,15 @@
 # @sabbour/squad-identity
 
+## 1.3.0
+
+### Minor Changes
+
+- 69d4bee: Refactor extension to use declarative `tools[]` registration and add experimental warning to README.
+
+### Patch Changes
+
+- a8f9d0f: Fix GitHub App registrations so key rotation works for newly created apps and older slug-only app files.
+
 ## 1.2.0
 
 ### Minor Changes
