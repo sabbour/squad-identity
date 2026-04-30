@@ -16,10 +16,19 @@ import {
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+
+// process.execPath may be the copilot binary, not node. Find real node.
+const NODE_BIN = (() => {
+  try {
+    return execFileSync('which', ['node'], { encoding: 'utf8' }).trim() || 'node';
+  } catch {
+    return 'node';
+  }
+})();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const LIB_DIR   = join(__dirname, 'lib');
@@ -38,7 +47,7 @@ let _session = null;
 async function runConfigure(flag) {
   try {
     const { stdout, stderr } = await execFileAsync(
-      process.execPath,
+      NODE_BIN,
       [CONFIGURE, flag],
       { cwd: REPO_ROOT, timeout: 30000 }
     );
@@ -301,6 +310,7 @@ const session = await joinSession({
     {
       name: 'squad_identity_configure',
       description: 'Update agent charters with ROLE_SLUG and refresh the identity block in copilot-instructions.md. Runs both update-charters and update-copilot-instructions. Idempotent.',
+      skipPermission: true,
       parameters: { type: 'object', properties: {}, required: [] },
       handler: async () => {
         const charterResult = await runConfigure('--update-charters');
@@ -311,6 +321,7 @@ const session = await joinSession({
     {
       name: 'squad_identity_setup',
       description: 'Run the full guided setup: init, discover roles, create/import apps, install, configure, and health check. Requires user interaction (browser).',
+      skipPermission: true,
       parameters: { type: 'object', properties: {}, required: [] },
       handler: async () => {
         try {
@@ -342,6 +353,7 @@ const session = await joinSession({
     {
       name: 'squad_identity_resolve_token',
       description: 'Resolve bot GitHub App token for the current agent. Derives ROLE_SLUG from charter, looks up app ID, signs JWT with private key, and exchanges for installation access token. Returns token or error.',
+      skipPermission: true,
       parameters: {
         type: 'object',
         properties: {
@@ -358,7 +370,7 @@ const session = await joinSession({
           const roleSlug = input.roleSlug || process.env.ROLE_SLUG || '';
 
           const { stdout, stderr } = await execFileAsync(
-            process.execPath,
+            NODE_BIN,
             [resolveScript, roleSlug],
             { cwd: REPO_ROOT, timeout: 10000 }
           );
@@ -379,6 +391,7 @@ const session = await joinSession({
     {
       name: 'squad_identity_rotate_key',
       description: 'Rotate a GitHub App private key for a role. Opens the GitHub App settings page so the user can generate a new key, then imports the downloaded PEM into the OS keychain. Guided two-step flow.',
+      skipPermission: true,
       parameters: {
         type: 'object',
         properties: {
@@ -399,7 +412,7 @@ const session = await joinSession({
 
           if (input.pemPath) {
             const { stdout, stderr } = await execFileAsync(
-              process.execPath,
+              NODE_BIN,
               [createAppScript, '--import-key', input.pemPath, '--role', input.role],
               { cwd: REPO_ROOT, timeout: 15000 }
             );
@@ -408,7 +421,7 @@ const session = await joinSession({
           }
 
           const { stdout, stderr } = await execFileAsync(
-            process.execPath,
+            NODE_BIN,
             [createAppScript, '--generate-key', '--role', input.role, '--owner', 'placeholder'],
             { cwd: REPO_ROOT, timeout: 15000 }
           );
@@ -434,6 +447,7 @@ const session = await joinSession({
     {
       name: 'squad_identity_lease_token',
       description: 'Issue a scoped token lease for an agent role (coordinator use only)',
+      skipPermission: true,
       parameters: {
         type: 'object',
         properties: {
@@ -459,7 +473,7 @@ const session = await joinSession({
           const maxTime = input.maxTime ?? 300;
 
           const { stdout, stderr } = await execFileAsync(
-            process.execPath,
+            NODE_BIN,
             [leaseScript, '--role', input.role, '--max-ops', String(maxOps), '--max-time', String(maxTime)],
             { cwd: REPO_ROOT, timeout: 15000 }
           );
@@ -474,6 +488,7 @@ const session = await joinSession({
     {
       name: 'squad_identity_attest_write',
       description: 'Record and verify an attestation for a bot-authored GitHub write',
+      skipPermission: true,
       parameters: {
         type: 'object',
         properties: {
@@ -531,7 +546,7 @@ const session = await joinSession({
           if (!verify) args.push('--no-verify');
 
           const { stdout, stderr } = await execFileAsync(
-            process.execPath,
+            NODE_BIN,
             args,
             { cwd: REPO_ROOT, timeout: 15000 }
           );
