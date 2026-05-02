@@ -58,7 +58,16 @@ function withLock(fn) {
 function readStore() {
   try {
     const raw = fs.readFileSync(STORE_PATH, 'utf-8');
-    return JSON.parse(raw);
+    const leases = JSON.parse(raw);
+    // TTL cleanup on read: remove expired/exhausted/revoked entries (lazy eviction)
+    const ts = now();
+    const active = {};
+    for (const [id, lease] of Object.entries(leases)) {
+      if (!lease.revoked && ts < lease.deadlineUnix && lease.remainingOps > 0) {
+        active[id] = lease;
+      }
+    }
+    return active;
   } catch {
     return {};
   }
@@ -146,17 +155,8 @@ export function revokeLease(scopeId) {
  * Remove all expired or exhausted leases from memory.
  */
 export function cleanupExpired() {
-  return withLock(() => {
-    const store = readStore();
-    const ts = now();
-    const active = {};
-    for (const [id, lease] of Object.entries(store)) {
-      if (!lease.revoked && ts < lease.deadlineUnix && lease.remainingOps > 0) {
-        active[id] = lease;
-      }
-    }
-    writeStore(active);
-  });
+  const store = readStore(); // readStore already filters expired entries
+  writeStore(store);
 }
 
 /**
@@ -165,10 +165,7 @@ export function cleanupExpired() {
  */
 export function listLeases() {
   const store = readStore();
-  const ts = now();
-  return Object.values(store)
-    .filter(l => !l.revoked && ts < l.deadlineUnix && l.remainingOps > 0)
-    .map(({ scopeId, role, deadlineUnix, remainingOps, leasedAtUnix }) => ({
-      scopeId, role, deadlineUnix, remainingOps, leasedAtUnix,
-    }));
+  return Object.values(store).map(({ scopeId, role, deadlineUnix, remainingOps, leasedAtUnix }) => ({
+    scopeId, role, deadlineUnix, remainingOps, leasedAtUnix,
+  }));
 }

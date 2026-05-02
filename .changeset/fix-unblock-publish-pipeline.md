@@ -19,3 +19,9 @@ surface (`squad_identity_status`, `squad_identity_update_charters`,
 `squad_identity_update_copilot_instructions`, `squad_identity_setup_steps`,
 `squad_identity_setup_all`). Updated SKILL.md to match the real extension, so agents get
 accurate tool docs instead of calling non-existent tools.
+
+**TTL cleanup backport (from kickstart/origin/dev):** Moved expired-lease eviction into
+`readStore()` as lazy cleanup on every read. `cleanupExpired()` now delegates to `readStore()`,
+and `listLeases()` drops the redundant inline filter since `readStore()` already removes
+expired/exhausted/revoked entries. This prevents stale lease accumulation in long-running
+sessions without requiring explicit cleanup calls.

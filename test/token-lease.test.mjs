@@ -58,9 +58,10 @@ describe('Token Lease Store', () => {
   it('exchangeLease throws after ops exhausted', () => {
     const lease = createLease({ role: 'backend', token: 'ghs_tok', maxOps: 1 });
     exchangeLease(lease.scopeId, 'backend'); // uses the one op
+    // Exhausted lease is evicted by readStore, so exchange sees "not found"
     assert.throws(
       () => exchangeLease(lease.scopeId, 'backend'),
-      /exhausted/i,
+      /exhausted|not found/i,
     );
   });
 
@@ -75,18 +76,20 @@ describe('Token Lease Store', () => {
   it('exchangeLease throws on expired lease', async () => {
     const lease = createLease({ role: 'backend', token: 'ghs_tok', maxTimeSec: 0 });
     await sleep(1);
+    // Expired lease is evicted by readStore, so exchange sees "not found"
     assert.throws(
       () => exchangeLease(lease.scopeId, 'backend'),
-      /expired/i,
+      /expired|not found/i,
     );
   });
 
   it('revokeLease makes subsequent exchange throw', () => {
     const lease = createLease({ role: 'backend', token: 'ghs_tok' });
     revokeLease(lease.scopeId);
+    // Revoked lease is evicted by readStore, so exchange sees "not found"
     assert.throws(
       () => exchangeLease(lease.scopeId, 'backend'),
-      /revoked/i,
+      /revoked|not found/i,
     );
   });
 
@@ -129,6 +132,16 @@ describe('Token Lease Store', () => {
     const ids = listLeases().map((l) => l.scopeId);
     assert.ok(!ids.includes(expired.scopeId), 'expired lease should be removed');
     assert.ok(ids.includes(alive.scopeId), 'alive lease should remain');
+  });
+
+  it('readStore filters expired leases lazily without explicit cleanupExpired call', async () => {
+    const expired = createLease({ role: 'x', token: 't', maxTimeSec: 0 });
+    const alive = createLease({ role: 'y', token: 't2', maxTimeSec: 600 });
+    await sleep(1);
+    // listLeases calls readStore which should filter without cleanupExpired
+    const ids = listLeases().map((l) => l.scopeId);
+    assert.ok(!ids.includes(expired.scopeId), 'expired lease should be absent from readStore on read');
+    assert.ok(ids.includes(alive.scopeId), 'alive lease should be present');
   });
 
   it('listLeases does not expose tokens', () => {
