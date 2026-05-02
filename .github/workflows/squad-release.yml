@@ -41,8 +41,14 @@ jobs:
 
       # Publish to npmjs using OIDC trusted publishing (no token needed).
       # Requires Node 24+ / npm 11.5.1+ per https://docs.npmjs.com/trusted-publishers
+      #
+      # Guard: only publish when there are no pending changesets (hasChangesets == 'false').
+      # When changesets ARE pending, the action runs `changeset version` locally which
+      # rewrites package.json to the next version — publishing from that state would ship
+      # an unreleased version off a non-release commit. The version PR must be merged
+      # first; the subsequent push to main (with hasChangesets == 'false') does the publish.
       - name: Publish to npmjs
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && steps.changesets.outputs.hasChangesets == 'false'
         id: publish-npm
         run: |
           echo "node $(node --version) / npm $(npm --version)"
@@ -54,7 +60,7 @@ jobs:
             echo "published=false" >> "$GITHUB_OUTPUT"
           else
             echo "Publishing @sabbour/squad-identity@$LOCAL_VERSION..."
-            npm publish --access public
+            npm publish --access public --provenance
             echo "published=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -79,6 +85,7 @@ jobs:
 
       - name: Publish to GitHub Packages
         if: steps.publish-npm.outputs.published == 'true'
+        continue-on-error: true
         run: npm publish --registry https://npm.pkg.github.com
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
