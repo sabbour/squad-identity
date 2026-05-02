@@ -14,9 +14,12 @@ App bot identity — never the human operator's ambient `gh` session.
 
 | Tool | Purpose |
 |------|---------|
-| `squad_identity_setup` | Show current status and guide to full CLI setup |
+| `squad_identity_status` | Show current identity config, registered apps, and agent map |
 | `squad_identity_doctor` | Health check (config, keys, token resolution) |
-| `squad_identity_configure` | Update charters with ROLE_SLUG and refresh copilot-instructions.md |
+| `squad_identity_update_charters` | Inject ROLE_SLUG into agent charters and write agentNameMap to config.json |
+| `squad_identity_update_copilot_instructions` | Refresh the squad-identity block in `.github/copilot-instructions.md` |
+| `squad_identity_setup_steps` | Return step-by-step setup instructions (browser-assisted GitHub App creation) |
+| `squad_identity_setup_all` | Run the full guided setup flow interactively |
 
 **Agent Runtime Tools:**
 
@@ -44,7 +47,7 @@ ROLE_SLUG="<slug>"  # injected by configure-identity --update-charters; do not e
 
 **If this line is absent from your charter:**
 1. Call `squad_identity_doctor` — it shows the full identity status including `agentNameMap`
-2. If `config.json` is missing: call `squad_identity_configure` to infer and populate it
+2. If `config.json` is missing: call `squad_identity_update_charters` to infer and populate it
 
 The mapping is stored in `.squad/identity/config.json` under `agentNameMap`.
 It is inferred from `.squad/team.md` (the `| Name | Role |` table) during setup.
@@ -197,8 +200,8 @@ The upgrade overwrites `.github/copilot-instructions.md` and `.github/agents/squ
 Your identity setup in `.squad/identity/` and `.github/extensions/` is **never touched**.
 
 To restore the identity references:
-1. Run `squad_identity_configure` tool (or `squad-identity setup` from CLI)
-2. This updates both charters and copilot-instructions in one step
+1. Run `squad_identity_update_charters` (or `squad-identity setup` from CLI) to re-inject ROLE_SLUG into charters
+2. Run `squad_identity_update_copilot_instructions` to refresh the copilot-instructions block
 
 Everything else (config.json, extension, skill) survives automatically.
 
