@@ -401,11 +401,25 @@ function cmdUpdateCharters() {
 // --update-copilot-instructions
 // ---------------------------------------------------------------------------
 
+const IDENTITY_BLOCK_START_PREFIX = '<!-- squad-identity: start';
 const IDENTITY_BLOCK_START = '<!-- squad-identity: start -->';
 const IDENTITY_BLOCK_END   = '<!-- squad-identity: end -->';
 
+function readPackageVersion() {
+  try {
+    const pkgUrl = new URL('../../../package.json', import.meta.url);
+    return JSON.parse(readFileSync(pkgUrl, 'utf-8')).version;
+  } catch {
+    return null;
+  }
+}
+
 function buildIdentityBlock() {
-  return `${IDENTITY_BLOCK_START}
+  const version = readPackageVersion();
+  const startTag = version
+    ? `<!-- squad-identity: start v${version} -->`
+    : IDENTITY_BLOCK_START;
+  return `${startTag}
 ## GIT IDENTITY — Bot Authentication
 
 This project uses GitHub App bot identity for all agent-authored writes.
@@ -441,10 +455,11 @@ function cmdUpdateCopilotInstructions() {
   }
 
   let content = readFileSync(COPILOT_INSTRUCTIONS, 'utf-8');
-  const startIdx = content.indexOf(IDENTITY_BLOCK_START);
-  const endIdx   = content.indexOf(IDENTITY_BLOCK_END);
+  const startMatch = content.match(/<!--\s*squad-identity:\s*start(?:\s+v[^\s>-]+)?\s*-->/);
+  const endIdx = content.indexOf(IDENTITY_BLOCK_END);
 
-  if (startIdx !== -1 && endIdx !== -1) {
+  if (startMatch && endIdx !== -1) {
+    const startIdx = startMatch.index;
     content = content.slice(0, startIdx) + block + content.slice(endIdx + IDENTITY_BLOCK_END.length);
     console.log('✅ Replaced existing identity block');
   } else {

@@ -8,7 +8,7 @@ import { createInterface } from 'node:readline';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PACKAGE_ROOT = resolve(__dirname, '..');
-const VERSION = '1.0.0';
+const VERSION = JSON.parse(readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf-8')).version;
 
 const EXIT_USER = 1;
 const EXIT_SYSTEM = 2;
@@ -421,14 +421,36 @@ function cmdUpgrade(args) {
   if (args.includes('--help') || args.includes('-h')) return printCommandHelp('upgrade');
   const target = resolveTarget(args);
   log(`🔧 Upgrading squad-identity in: ${target}\n`);
+
+  const previousVersion = readInstalledIdentityVersion(target);
+
   try {
     syncInstallFiles(target, { includeIdentityConfig: false });
   } catch (err) {
     failSystem(err.message);
   }
   runConfigureForUpgrade('--update-copilot-instructions', target);
-  log('\n✅ squad-identity upgrade complete.');
-  return { upgraded: true, target };
+
+  if (previousVersion && previousVersion === VERSION) {
+    log(`\n✅ squad-identity already on v${VERSION} in ${target}.`);
+  } else if (previousVersion) {
+    log(`\n✅ squad-identity in ${target}: v${previousVersion} → v${VERSION}`);
+  } else {
+    log(`\n✅ squad-identity installed in ${target} at v${VERSION}.`);
+  }
+  return { upgraded: true, target, fromVersion: previousVersion ?? null, toVersion: VERSION };
+}
+
+function readInstalledIdentityVersion(target) {
+  const instrPath = join(target, '.github', 'copilot-instructions.md');
+  if (!existsSync(instrPath)) return null;
+  try {
+    const content = readFileSync(instrPath, 'utf-8');
+    const match = content.match(/<!--\s*squad-identity:\s*start(?:\s+v([^\s>-]+))?\s*-->/);
+    return match && match[1] ? match[1] : null;
+  } catch {
+    return null;
+  }
 }
 
 async function cmdSetup(args) {
