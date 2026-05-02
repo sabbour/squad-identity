@@ -169,6 +169,8 @@ npm install -g @sabbour/squad-identity@latest
 squad-identity upgrade
 ```
 
+The `upgrade` command shows a from→to summary (e.g. `v1.4.6 → v1.5.0`) and refreshes the artifacts listed below. Run `squad-identity doctor` afterwards to verify every injected artifact is present and version-stamped.
+
 ### What's preserved (never touched by upgrade)
 
 - `.squad/identity/config.json` — your agent-to-role mappings
@@ -325,7 +327,7 @@ curl -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/{owner}/{rep
 | `squad-identity import-app --role <r>` | Register an existing GitHub App for a role (direct or `--search` mode) |
 | `squad-identity resolve-token --role <r>` | Resolve a bot GitHub installation token for a role (CLI use, not agent) |
 | `squad-identity rotate-key --role <r>` | Rotate a GitHub App private key (two-step guided flow) |
-| `squad-identity doctor` | Health check: config, keychain, token resolution |
+| `squad-identity doctor` | Health check: config, keychain, token resolution, copilot-instructions identity block, per-charter `ROLE_SLUG` + skill pointer |
 
 **`--json` flag:** Human-facing commands (`setup`, `init`, `upgrade`, `doctor`) print progress to stderr and only emit JSON to stdout when `--json` is passed. Machine commands (`resolve-token`) always emit to stdout.
 
@@ -338,7 +340,7 @@ After restarting Copilot CLI, these 7 tools are available in every session:
 | Tool | What it does |
 |------|-------------|
 | `squad_identity_setup` | Show current status and guide to full CLI setup |
-| `squad_identity_doctor` | Health check (config, keychain, token resolution) |
+| `squad_identity_doctor` | Health check (config, keychain, token resolution, injected blocks in copilot-instructions and per-agent charters) |
 | `squad_identity_configure` | Update charters with ROLE_SLUG and refresh copilot-instructions.md |
 
 **Agent runtime tools:**

@@ -317,6 +317,63 @@ async function cmdDoctor() {
     }
   }
 
+  // -----------------------------------------------------------------------
+  // Injected-block checks: copilot-instructions + per-charter ROLE_SLUG/skill
+  // -----------------------------------------------------------------------
+  console.log('\n📎 Injected blocks');
+
+  if (existsSync(COPILOT_INSTRUCTIONS)) {
+    const content = readFileSync(COPILOT_INSTRUCTIONS, 'utf-8');
+    const startRe = /<!--\s*squad-identity:\s*start(?:\s+v([^\s>-]+))?\s*-->/;
+    const endRe = /<!--\s*squad-identity:\s*end\s*-->/;
+    const startMatch = content.match(startRe);
+    if (startMatch && endRe.test(content)) {
+      const v = startMatch[1];
+      console.log(v
+        ? `✅ copilot-instructions.md: identity block present (v${v})`
+        : '⚠  copilot-instructions.md: identity block present but unstamped — run `squad-identity upgrade`');
+    } else {
+      console.log('⚠  copilot-instructions.md: identity block missing — run `squad-identity upgrade`');
+    }
+  } else {
+    console.log('⚠  .github/copilot-instructions.md not found — run `squad-identity upgrade`');
+  }
+
+  if (cfg && cfg.agentNameMap && Object.keys(cfg.agentNameMap).length > 0) {
+    const SKILL_REF_LINE = `Relevant skill: '.squad/skills/squad-identity/SKILL.md' — read before any GitHub write.`;
+    let charterIssues = 0;
+    for (const [agentName, slug] of Object.entries(cfg.agentNameMap)) {
+      const charterPath = join(AGENTS_DIR, agentName, 'charter.md');
+      if (!existsSync(charterPath)) {
+        console.log(`⚠  charter missing for "${agentName}" → ${charterPath}`);
+        charterIssues++;
+        continue;
+      }
+      const content = readFileSync(charterPath, 'utf-8');
+      const slugRe = new RegExp(`ROLE_SLUG=["']${slug}["']`);
+      const placeholderRe = /ROLE_SLUG=["']\{role_slug\}["']/;
+      const anySlugRe = /ROLE_SLUG=["'][^"']+["']/;
+      const hasSkill = content.includes(SKILL_REF_LINE);
+      if (placeholderRe.test(content)) {
+        console.log(`⚠  ${agentName}: ROLE_SLUG placeholder not replaced — run --update-charters`);
+        charterIssues++;
+      } else if (!slugRe.test(content)) {
+        if (anySlugRe.test(content)) {
+          console.log(`⚠  ${agentName}: ROLE_SLUG present but does not match config slug "${slug}" — run --update-charters`);
+          charterIssues++;
+        }
+        // No ROLE_SLUG line at all is allowed (agent uses squad_identity_status fallback)
+      }
+      if (!hasSkill) {
+        console.log(`⚠  ${agentName}: skill pointer missing — run --update-charters`);
+        charterIssues++;
+      }
+    }
+    if (charterIssues === 0) {
+      console.log(`✅ All ${Object.keys(cfg.agentNameMap).length} charters have correct ROLE_SLUG + skill pointer`);
+    }
+  }
+
   console.log('\n' + (ok ? '✅ Identity looks healthy.' : '⚠  Issues detected — see above.'));
 }
 
@@ -401,11 +458,25 @@ function cmdUpdateCharters() {
 // --update-copilot-instructions
 // ---------------------------------------------------------------------------
 
+const IDENTITY_BLOCK_START_PREFIX = '<!-- squad-identity: start';
 const IDENTITY_BLOCK_START = '<!-- squad-identity: start -->';
 const IDENTITY_BLOCK_END   = '<!-- squad-identity: end -->';
 
+function readPackageVersion() {
+  try {
+    const pkgUrl = new URL('../../../package.json', import.meta.url);
+    return JSON.parse(readFileSync(pkgUrl, 'utf-8')).version;
+  } catch {
+    return null;
+  }
+}
+
 function buildIdentityBlock() {
-  return `${IDENTITY_BLOCK_START}
+  const version = readPackageVersion();
+  const startTag = version
+    ? `<!-- squad-identity: start v${version} -->`
+    : IDENTITY_BLOCK_START;
+  return `${startTag}
 ## GIT IDENTITY — Bot Authentication
 
 This project uses GitHub App bot identity for all agent-authored writes.
@@ -441,10 +512,11 @@ function cmdUpdateCopilotInstructions() {
   }
 
   let content = readFileSync(COPILOT_INSTRUCTIONS, 'utf-8');
-  const startIdx = content.indexOf(IDENTITY_BLOCK_START);
-  const endIdx   = content.indexOf(IDENTITY_BLOCK_END);
+  const startMatch = content.match(/<!--\s*squad-identity:\s*start(?:\s+v[^\s>-]+)?\s*-->/);
+  const endIdx = content.indexOf(IDENTITY_BLOCK_END);
 
-  if (startIdx !== -1 && endIdx !== -1) {
+  if (startMatch && endIdx !== -1) {
+    const startIdx = startMatch.index;
     content = content.slice(0, startIdx) + block + content.slice(endIdx + IDENTITY_BLOCK_END.length);
     console.log('✅ Replaced existing identity block');
   } else {
