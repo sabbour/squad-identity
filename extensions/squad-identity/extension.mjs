@@ -10,10 +10,19 @@
 import { joinSession } from '@github/copilot-sdk/extension';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFile } from 'node:child_process';
+import { execFile, execSync } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+
+// NODE_BIN inside Copilot CLI resolves to the copilot binary, not Node.js.
+// Resolve the actual node binary explicitly via PATH so lib scripts run correctly.
+let NODE_BIN;
+try {
+  NODE_BIN = execSync('which node', { encoding: 'utf8' }).trim();
+} catch {
+  NODE_BIN = 'node'; // fallback — execFile will resolve from PATH
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const LIB_DIR   = join(__dirname, 'lib');
@@ -29,7 +38,7 @@ const CONFIGURE   = join(LIB_DIR, 'configure-identity.mjs');
 async function runConfigure(flag) {
   try {
     const { stdout, stderr } = await execFileAsync(
-      process.execPath,
+      NODE_BIN,
       [CONFIGURE, flag],
       { cwd: REPO_ROOT, timeout: 30000 }
     );
@@ -207,7 +216,7 @@ Call \`squad_identity_update_copilot_instructions\` to restore the identity bloc
         const role = roleSlug || process.env.ROLE_SLUG || '';
 
         const { stdout, stderr } = await execFileAsync(
-          process.execPath,
+          NODE_BIN,
           [resolveScript, role],
           { cwd: REPO_ROOT, timeout: 10000 }
         );
@@ -244,7 +253,7 @@ Call \`squad_identity_update_copilot_instructions\` to restore the identity bloc
 
         if (pemPath) {
           const { stdout } = await execFileAsync(
-            process.execPath,
+            NODE_BIN,
             [createAppScript, '--import-key', pemPath, '--role', role],
             { cwd: REPO_ROOT, timeout: 15000 }
           );
@@ -252,7 +261,7 @@ Call \`squad_identity_update_copilot_instructions\` to restore the identity bloc
         }
 
         const { stdout } = await execFileAsync(
-          process.execPath,
+          NODE_BIN,
           [createAppScript, '--generate-key', '--role', role, '--owner', 'placeholder'],
           { cwd: REPO_ROOT, timeout: 15000 }
         );
@@ -298,7 +307,7 @@ Call \`squad_identity_update_copilot_instructions\` to restore the identity bloc
         const time = maxTime ?? 300;
 
         const { stdout } = await execFileAsync(
-          process.execPath,
+          NODE_BIN,
           [leaseScript, '--role', role, '--max-ops', String(ops), '--max-time', String(time)],
           { cwd: REPO_ROOT, timeout: 15000 }
         );
@@ -342,7 +351,7 @@ Call \`squad_identity_update_copilot_instructions\` to restore the identity bloc
         ];
         if (!doVerify) args.push('--no-verify');
 
-        const { stdout } = await execFileAsync(process.execPath, args, { cwd: REPO_ROOT, timeout: 15000 });
+        const { stdout } = await execFileAsync(NODE_BIN, args, { cwd: REPO_ROOT, timeout: 15000 });
         return stdout?.trim() || 'No output.';
       }),
     },
