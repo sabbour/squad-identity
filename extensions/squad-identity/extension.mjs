@@ -73,7 +73,7 @@ const session = await joinSession({
       skipPermission: true,
       parameters: { type: 'object', properties: {}, required: [] },
       handler: jsonHandler(async () => {
-        const out = await runConfigure('status');
+        const out = await runConfigure('--status');
         return out || 'No output.';
       }),
     },
@@ -83,7 +83,7 @@ const session = await joinSession({
       skipPermission: true,
       parameters: { type: 'object', properties: {}, required: [] },
       handler: jsonHandler(async () => {
-        const out = await runConfigure('doctor');
+        const out = await runConfigure('--doctor');
         return out || 'No output.';
       }),
     },
@@ -95,7 +95,7 @@ const session = await joinSession({
       skipPermission: true,
       parameters: { type: 'object', properties: {}, required: [] },
       handler: jsonHandler(async () => {
-        const out = await runConfigure('update-charters');
+        const out = await runConfigure('--update-charters');
         return out || 'No output.';
       }),
     },
@@ -105,7 +105,7 @@ const session = await joinSession({
       skipPermission: true,
       parameters: { type: 'object', properties: {}, required: [] },
       handler: jsonHandler(async () => {
-        const out = await runConfigure('update-copilot-instructions');
+        const out = await runConfigure('--update-copilot-instructions');
         return out || 'No output.';
       }),
     },
@@ -175,7 +175,7 @@ Call \`squad_identity_update_copilot_instructions\` to restore the identity bloc
       skipPermission: true,
       parameters: { type: 'object', properties: {}, required: [] },
       handler: jsonHandler(async () => {
-        const out = await runConfigure('status');
+        const out = await runConfigure('--status');
         const instructions = [
           '🚀 To run full guided setup, use the CLI in your terminal:',
           '',
