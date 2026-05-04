@@ -171,6 +171,23 @@ After import:
 
 ---
 
+## Known Limitations
+
+The Copilot CLI extension runtime may route MCP tool calls through the `copilot` binary
+instead of invoking the registered handler. When this happens, `squad_identity_doctor`,
+`squad_identity_status`, and similar tools return an "unknown option" error.
+
+**CLI fallbacks** (always work from a terminal):
+
+```bash
+squad-identity doctor    # equivalent to squad_identity_doctor
+squad-identity status    # equivalent to squad_identity_status
+```
+
+These fallbacks are installed globally alongside the extension.
+
+---
+
 ## Anti-Patterns
 
 Each of these is a P1 governance failure:

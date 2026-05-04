@@ -489,7 +489,7 @@ Your ROLE_SLUG is injected into your charter — look for:
 ROLE_SLUG="<slug>"  # injected by configure-identity --update-charters
 \`\`\`
 
-If absent, call \`squad_identity_status\` to see the full agentNameMap.
+If absent, call \`squad_identity_status\` to see the full agentNameMap (CLI fallback: \`squad-identity status\`).
 
 **Token usage (inline per-call, never export):**
 \`\`\`bash

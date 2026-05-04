@@ -69,7 +69,7 @@ const session = await joinSession({
     // ── Status & Diagnostics ───────────────────────────────────────────────
     {
       name: 'squad_identity_status',
-      description: 'Show the current Squad identity configuration: agentNameMap (agent name → role slug) and registered GitHub App registrations.',
+      description: 'Show the current Squad identity configuration: agentNameMap (agent name → role slug) and registered GitHub App registrations. If this tool fails, run the equivalent CLI command: `squad-identity status`',
       skipPermission: true,
       parameters: { type: 'object', properties: {}, required: [] },
       handler: jsonHandler(async () => {
@@ -79,7 +79,7 @@ const session = await joinSession({
     },
     {
       name: 'squad_identity_doctor',
-      description: 'Run a health check on the Squad identity setup: verifies config.json exists, agentNameMap is populated, PEM keys are readable, resolve-token.mjs is accessible, and token resolution succeeds for the lead role.',
+      description: 'Run a health check on the Squad identity setup: verifies config.json exists, agentNameMap is populated, PEM keys are readable, resolve-token.mjs is accessible, and token resolution succeeds for the lead role. If this tool fails, run the equivalent CLI command: `squad-identity doctor`',
       skipPermission: true,
       parameters: { type: 'object', properties: {}, required: [] },
       handler: jsonHandler(async () => {
