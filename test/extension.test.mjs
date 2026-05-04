@@ -71,9 +71,9 @@ describe('Extension: tool descriptions', () => {
 describe('Extension: tool handlers', () => {
   it('admin tools call configure-identity.mjs', () => {
     // doctor and configure both use runConfigure
-    assert.ok(extensionSource.includes("runConfigure('--doctor')"), 'doctor should call --doctor');
-    assert.ok(extensionSource.includes("runConfigure('--update-charters')"), 'configure should call --update-charters');
-    assert.ok(extensionSource.includes("runConfigure('--update-copilot-instructions')"), 'configure should call --update-copilot-instructions');
+    assert.ok(extensionSource.includes("runConfigure('doctor')"), 'doctor should call doctor');
+    assert.ok(extensionSource.includes("runConfigure('update-charters')"), 'configure should call update-charters');
+    assert.ok(extensionSource.includes("runConfigure('update-copilot-instructions')"), 'configure should call update-copilot-instructions');
   });
 
   it('resolve_token tool calls resolve-token.mjs', () => {

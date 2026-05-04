@@ -648,13 +648,13 @@ async function cmdInjectCoordinatorContext() {
 
 const args = process.argv.slice(2);
 
-if (args.includes('--status')) {
+if (args.includes('--status') || args.includes('status')) {
   cmdStatus();
-} else if (args.includes('--doctor')) {
+} else if (args.includes('--doctor') || args.includes('doctor')) {
   await cmdDoctor();
-} else if (args.includes('--update-charters')) {
+} else if (args.includes('--update-charters') || args.includes('update-charters')) {
   cmdUpdateCharters();
-} else if (args.includes('--update-copilot-instructions')) {
+} else if (args.includes('--update-copilot-instructions') || args.includes('update-copilot-instructions')) {
   cmdUpdateCopilotInstructions();
 } else if (args.includes('--inject-context')) {
   const idx = args.indexOf('--inject-context');
